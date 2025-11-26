@@ -50,6 +50,10 @@ stm32RadioLibHal::stm32RadioLibHal(SPI_HandleTypeDef* spi)
 // para utilitzar esta fucion vamos a tener que codificar el pin y el port en el primer parametero "pin"
 void stm32RadioLibHal::pinMode(uint32_t pin, uint32_t mode) {
 
+    if(pin == RADIOLIB_NC) {
+        return;
+    }
+
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     // recogemos puerto y pin:
@@ -73,35 +77,60 @@ void stm32RadioLibHal::pinMode(uint32_t pin, uint32_t mode) {
     // HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
     // HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
     // HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
+    // to do
     
 }
 
 void stm32RadioLibHal::digitalWrite(uint32_t pin, uint32_t value) {
-    // Empty
+    if(pin == RADIOLIB_NC) {
+        return;
+    }
+    GPIO_TypeDef* port = getPort(pin);
+    uint16_t pinMask = getPinMask(pin);
+    HAL_GPIO_WritePin(
+        port,
+        pinMask,
+        (value == GpioLevelHigh) ? GPIO_PIN_SET : GPIO_PIN_RESET
+    );
+  
 }
 
 uint32_t stm32RadioLibHal::digitalRead(uint32_t pin) {
-    return 0;
+    if (pin == RADIOLIB_NC) {
+        return GpioLevelLow;    // or simply 0
+    }
+    GPIO_TypeDef* port = getPort(pin);
+    uint16_t pinMask = getPinMask(pin);
+    return (HAL_GPIO_ReadPin(port, pinMask) == GPIO_PIN_SET) ? GpioLevelHigh : GpioLevelLow;
 }
 
 void stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb)(void), uint32_t mode) {
-    // Empty
+    // todo mpty
 }
 
 void stm32RadioLibHal::detachInterrupt(uint32_t interruptNum) {
-    // Empty
+    // todo Empty
 }
 
 void stm32RadioLibHal::delay(RadioLibTime_t ms) {
-    // Empty
+#if !defined(RADIOLIB_CLOCK_DRIFT_MS)
+    HAL_Delay(ms);
+#else
+    HAL_Delay(ms * 1000 / (1000 + RADIOLIB_CLOCK_DRIFT_MS));
+#endif
 }
-
 void stm32RadioLibHal::delayMicroseconds(RadioLibTime_t us) {
     // Empty
 }
 
 RadioLibTime_t stm32RadioLibHal::millis() {
-    return 0;
+#if !defined(RADIOLIB_CLOCK_DRIFT_MS)
+    return HAL_GetTick();
+#else
+    // Same correction RadioLib uses on Arduino
+    return HAL_GetTick() * 1000 / (1000 + RADIOLIB_CLOCK_DRIFT_MS);
+#endif
 }
 
 RadioLibTime_t stm32RadioLibHal::micros() {
@@ -133,10 +162,10 @@ void stm32RadioLibHal::spiEnd() {
 }
 
 void stm32RadioLibHal::init() {
-    // Empty
+    // No need for this in stm32. Init SPI at boot!!
 }
 void stm32RadioLibHal::term() {
-    // Empty
+    // No implementation needed for STM32
 }
 
 void stm32RadioLibHal::tone(uint32_t pin, unsigned int frequency, RadioLibTime_t duration) {
