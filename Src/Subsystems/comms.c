@@ -6,6 +6,7 @@
 #include "task.h"
 #include "comms.h"
 #include "radio.h"
+#include "radiolib_wrapper.h"
 
 
 
@@ -249,7 +250,7 @@ void ProcessRadioCallbacks(void)
     CommsFlags.callbackFinished = false;
 }
 
-// Startup state
+// Unica funcio que esta en RADIOLIB
 void Startup(void)
 {
     BoardInitMcu();   
@@ -259,9 +260,28 @@ void Startup(void)
     RadioEvents.RxTimeout = OnRxTimeout;
     RadioEvents.RxError = OnRxError;
     RadioEvents.CadDone = OnCadDone;
-    Radio.Init(&RadioEvents);  // Initializes the Radio
-    SX1262Config(11,1,CommsSettings.RF_F);   // Configures the transceiver
-    SX126xConfigureCad( CAD_SYMBOL_NUM,CAD_DET_PEAK,CAD_DET_MIN,0); // Set up channel activity detection parameters
+
+    RadioLib_Init(&RadioEvents);  // Initializes the Radio with radiolib
+    
+    RadioLib_SetChannel(CommsSettings.RF_F); // Configures the transceiver
+
+    RadioLib_SetTxConfig( // Configura els parametres de TX
+        11,                     // SF
+        1,                      // CR
+        TX_OUTPUT_POWER,        // Potencia de transmissio
+        LORA_BANDWIDTH,         // BW
+        LORA_IQ_INVERSION_ON,   // IQ
+        true,                   // CRC ON
+        LORA_PREAMBLE_LENGTH);  // Sequencia la sincronitzacio
+
+    RadioLib_SetRxConfig( // Configura els parametres de RX
+        11,                     // SF
+        1,                      // CR
+        LORA_BANDWIDTH,         // BW
+        LORA_IQ_INVERSION_ON,   // IQ
+        true,                   // CRC ON
+        LORA_PREAMBLE_LENGTH) ; // Sequencia la sincronitzacio
+
 }
 
 // Sleep state 

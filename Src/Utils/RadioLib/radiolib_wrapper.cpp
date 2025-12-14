@@ -25,8 +25,9 @@ extern "C" { // to stop name mangling
         }
     }
 
-    void RadioLib_SetChannel(uint32_t freq) {
-       const int state = radio.setFrequency(freq); //esperem MHz
+    void RadioLib_SetChannel(uint32_t freq_hz) {
+       float freq_mhz = freq_hz / 1000000.0f;
+       const int state = radio.setFrequency(freq_mhz); //esperem MHz
        if(state != RADIOLIB_ERR_NONE) {
            // Handle error (could add error callback or logging)
            //printf("Error en la configuracio de la frequencia: %d\n", state);
