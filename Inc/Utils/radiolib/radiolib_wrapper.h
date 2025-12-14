@@ -32,15 +32,15 @@ void RadioLib_SetRxConfig( // Configura els parametres de RX
 
 void RadioLib_Send(uint8_t *buf, uint16_t len); // Envia les dades
 
-void RadioLib_Rx(uint32_t timeoutMs); // Entra en mode recepcio durant timeoutMs milisegons
+int16_t RadioLib_Rx(uint32_t timeoutMs); // Entra en mode recepcio durant timeoutMs milisegons
 
-void RadioLib_Sleep(); // Entra en mode sleep
+int16_t RadioLib_Sleep(void); // Entra en mode sleep
 
-void RadioLib_Standby(); // Entra en mode standby
+int16_t RadioLib_Standby(void); // Entra en mode standby
 
-void RadioLib_StartCad(); // Comença la detecció de canal
+int RadioLib_StartCad(void); // Comença la detecció de canal. Ens cal realment aquesta funcio??
 
-void RadioLib_IrqProcess(); // Funcio que no fa res pq radiolib ja fa la seva gestio, pero aixi corregim menys codi
+void RadioLib_IrqProcess(void); // Funcio que no fa res pq radiolib ja fa la seva gestio, pero aixi corregim menys codi
 
 
 typedef struct {

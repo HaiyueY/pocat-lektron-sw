@@ -26,7 +26,7 @@ extern "C" { // to stop name mangling
     }
 
     void RadioLib_SetChannel(uint32_t freq) {
-       const int state = radio.setFrequency(freq);
+       const int state = radio.setFrequency(freq); //esperem MHz
        if(state != RADIOLIB_ERR_NONE) {
            // Handle error (could add error callback or logging)
            //printf("Error en la configuracio de la frequencia: %d\n", state);
@@ -36,7 +36,7 @@ extern "C" { // to stop name mangling
     void RadioLib_SetTxConfig(uint8_t sf, uint8_t cr, int8_t power,
                           uint8_t bw_code, bool iqInverted,
                           bool crcOn, uint16_t preambleLen) {
-        const int state;
+        int state;
         state = radio.setSpreadingFactor(sf);
         if(state != RADIOLIB_ERR_NONE) {
             // Handle error (could add error callback or logging)
@@ -77,7 +77,7 @@ extern "C" { // to stop name mangling
     void RadioLib_SetRxConfig(uint8_t sf, uint8_t cr, uint8_t bw_code,
                           bool iqInverted, bool crcOn,
                           uint16_t preambleLen) {
-        const int state;
+        int state;
         state = radio.setSpreadingFactor(sf);
         if(state != RADIOLIB_ERR_NONE) {
             // Handle error (could add error callback or logging)
@@ -113,6 +113,7 @@ extern "C" { // to stop name mangling
     int16_t RadioLib_Rx(uint32_t timeoutMs) {
         //return radio.startReceive(timeoutMs); Aquesta es la manera de ferho no bloquejant
         int st = radio.receive(nullptr, 0, timeoutMs); //Aquesta es la manera de ferho bloquejant
+
         if(st == RADIOLIB_ERR_NONE) {
             uint16_t len = radio.getPacketLength();
             uint8_t buf[len];
@@ -142,10 +143,60 @@ extern "C" { // to stop name mangling
             }
         }
         else{
-            // Other errors can be handled here
+            // Hem de tractar la resta d'errors aqui
         }
         return st;
     }
+
+    void RadioLib_Send(uint8_t *buf, uint16_t len) {
+        int st = radio.transmit(buf, len);
+        if(st == RADIOLIB_ERR_NONE) {
+            if(radioEventsPtr && radioEventsPtr->TxDone) {
+                radioEventsPtr->TxDone();
+            }
+        }
+        else if(st == RADIOLIB_ERR_TX_TIMEOUT) {
+            if(radioEventsPtr && radioEventsPtr->TxTimeout) {
+                radioEventsPtr->TxTimeout();
+            }
+        }
+        else{
+            // Hem de tractar la resta d'errors aqui
+        }
+    }
+
+    int16_t RadioLib_Sleep(void) {
+        return radio.sleep();
+    }
+
+    int16_t RadioLib_Standby(void) {
+        return radio.standby();
+    }
+
+    int16_t RadioLib_StartCad(void) {  // Ens cal realment aquesta funcio??
+        int16_t st = radio.scanChannel();
+
+        bool detected = false;
+        if(st == RADIOLIB_LORA_DETECTED) {
+            detected = true;
+        } else if(st == RADIOLIB_CHANNEL_FREE) {
+           detected = false;
+        } else {
+           // La resta d'errors s'han de tractar aqui
+        }
+
+        if(radioEventsPtr && radioEventsPtr->CadDone) {
+            radioEventsPtr->CadDone(detected);
+        }
+        return st;
+    }
+
+    void RadioLib_IrqProcess(void) {
+        // De moment no fa falta implementar res aqui ja que radiolib gestiona els interrupts internament.
+        // No obstant, si ens posem en un mode no bloquejant, potser caldra implementar alguna cosa aqui.
+    }
+
+
 
 
 }
