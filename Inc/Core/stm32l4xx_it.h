@@ -6,15 +6,14 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2022 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
- ******************************************************************************
+  ******************************************************************************
   */
 /* USER CODE END Header */
 
@@ -23,7 +22,7 @@
 #define __STM32L4xx_IT_H
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /* Private includes ----------------------------------------------------------*/
@@ -52,17 +51,10 @@ void HardFault_Handler(void);
 void MemManage_Handler(void);
 void BusFault_Handler(void);
 void UsageFault_Handler(void);
+void SVC_Handler(void);
 void DebugMon_Handler(void);
-void TIM1_UP_TIM16_IRQHandler(void);
-void TIM1_TRG_COM_TIM17_IRQHandler(void);
-void TIM2_IRQHandler(void);
-void SPI2_IRQHandler(void);
-void EXTI15_10_IRQHandler(void);
-void TIM5_IRQHandler(void);
-void UART4_IRQHandler(void);
-void TIM6_DAC_IRQHandler(void);
-void TIM7_IRQHandler(void);
-void DMA2_Channel5_IRQHandler(void);
+void PendSV_Handler(void);
+void SysTick_Handler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
@@ -72,5 +64,3 @@ void DMA2_Channel5_IRQHandler(void);
 #endif
 
 #endif /* __STM32L4xx_IT_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

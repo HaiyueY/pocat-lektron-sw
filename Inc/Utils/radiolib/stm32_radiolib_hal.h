@@ -40,7 +40,10 @@ private:
 
     GPIO_TypeDef* getPort(uint32_t pin);
     uint16_t getPinMask(uint32_t pin);
-    void enablePortClock(GPIO_TypeDef* port) ;
+    void enablePortClock(GPIO_TypeDef* port);
+    static void (*_extiCallbacks[16])(void); // callbacks for EXTI lines 0-15
+    static void handleExtiCallback(uint16_t pin);
+    static int getExtiLineFromPinMask(uint16_t pinMask);
 };
 
 #endif
