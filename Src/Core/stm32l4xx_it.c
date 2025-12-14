@@ -200,4 +200,63 @@ void SysTick_Handler(void)
 
 /* USER CODE BEGIN 1 */
 
+
+extern "C" void EXTI0_IRQHandler(void)
+{
+  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0)) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  }
+}
+
+extern "C" void EXTI1_IRQHandler(void)
+{
+  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_1)) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+  }
+}
+
+extern "C" void EXTI2_IRQHandler(void)
+{
+  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2)) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
+  }
+}
+
+extern "C" void EXTI3_IRQHandler(void)
+{
+  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_3)) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
+  }
+}
+
+extern "C" void EXTI4_IRQHandler(void)
+{
+  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_4)) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
+  }
+}
+
+
+extern "C" void EXTI9_5_IRQHandler(void)
+{
+  for (uint32_t line = 5; line <= 9; ++line) {
+    uint16_t mask = (uint16_t)(1u << line);
+    if (__HAL_GPIO_EXTI_GET_IT(mask)) {
+      HAL_GPIO_EXTI_IRQHandler(mask);
+    }
+  }
+}
+
+extern "C" void EXTI15_10_IRQHandler(void)
+{
+  for (uint32_t line = 10; line <= 15; ++line) {
+    uint16_t mask = (uint16_t)(1u << line);
+
+    if (__HAL_GPIO_EXTI_GET_IT(mask)) {
+      HAL_GPIO_EXTI_IRQHandler(mask);
+    }
+  }
+}
+
+
 /* USER CODE END 1 */

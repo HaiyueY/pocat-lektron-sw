@@ -9,16 +9,16 @@
 static TaskHandle_t obc_task_handle;
 
 // peripheral variables
-SPI_HandleTypeDef hspi2; // important to define it because of extern declaration in header
+SPI_HandleTypeDef hspi1; // might have to change it, picked spi1 for radiolib, but it might have to be another
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim5; // timer for micros()
 
 /* ---- Private function prototypes ---- */
 static void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM5_Init(void);
+static void MX_SPI1_Init(void);
 
 
 int main(void)
@@ -27,8 +27,7 @@ int main(void)
     HAL_Init();
     SystemClock_Config();
     MX_USART2_UART_Init();  // Initialized for printf usage
-    MX_SPI2_Init(); // SPI initialization
-    MX_GPIO_Init();
+    MX_SPI1_Init(); // SPI initialization
     MX_TIM5_Init(); // Timer will be used for micros()
     MX_TIM2_Init();
 
@@ -105,32 +104,46 @@ void SystemClock_Config(void)
 }
 
 
-
-
-static void MX_SPI2_Init(void) // revise spi configuration so that it works with Radio chip
+/**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
 {
 
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_4BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_HARD_OUTPUT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 7;
-  hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi2.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 7;
+  hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
-    // Error_Handler(); have to implement
+    Error_Handler();
   }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
 
 }
+
 
 // timer for micros in RadioLib
 /**
@@ -146,9 +159,9 @@ static void MX_TIM5_Init(void)
 
 
   htim5.Instance = TIM5;
-  htim5.Init.Prescaler = 100 - 1;
+  htim5.Init.Prescaler = 80 - 1;
   htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim5.Init.Period = 4294967295;
+  htim5.Init.Period = 0xFFFFFFFF;
   htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
@@ -220,26 +233,6 @@ static void MX_TIM2_Init(void)
 
 }
 
-
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
-}
 
 
 // view what to do here...

@@ -63,6 +63,7 @@ stm32RadioLibHal::stm32RadioLibHal(SPI_HandleTypeDef* spi)
     
 // para utilitzar esta fucion vamos a tener que codificar el pin y el port en el primer parametero "pin"
 // we have to be able to enable interrupt for atachInterrupt
+// do we need to manage pinMode set as interrupt?? -> bc then __HAL_RCC_SYSCFG_CLK_ENABLE();
 void stm32RadioLibHal::pinMode(uint32_t pin, uint32_t mode) { 
 
     if(pin == RADIOLIB_NC) {
@@ -161,11 +162,10 @@ void stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb
     }
 
     // set priority and enable
-    HAL_NVIC_SetPriority(irqn, 5, 0);
+    HAL_NVIC_SetPriority(irqn, 5, 0); // <- To-do: check priority value
     HAL_NVIC_EnableIRQ(irqn);
 }
 
-// __HAL_GPIO_EXTI_CLEAR_IT(pinMask);???
 void stm32RadioLibHal::detachInterrupt(uint32_t interruptNum) {
     if (interruptNum == RADIOLIB_NC) {
         return;
@@ -180,10 +180,7 @@ void stm32RadioLibHal::detachInterrupt(uint32_t interruptNum) {
 
     _extiCallbacks[line] = nullptr;
 
-#if defined(EXTI)
-    EXTI->IMR  &= ~pinMask;   // mask interrupt
-    EXTI->EMR  &= ~pinMask;   // mask event (optional)
-#endif
+    __HAL_GPIO_EXTI_CLEAR_IT(pinMask); // Clear EXTI flag ??
 
     IRQn_Type irqn;
 
@@ -262,30 +259,35 @@ RadioLibTime_t stm32RadioLibHal::micros() {
 
 
 long stm32RadioLibHal::pulseIn(uint32_t pin, uint32_t state, RadioLibTime_t timeout) {
+    
+    if(pin == RADIOLIB_NC) {
+        return 0;
+    }
+
     GPIO_TypeDef* port = getPort(pin);
     uint16_t pinMask = getPinMask(pin);
 
     uint32_t startMicros = micros();
-    uint32_t timeoutMicros = startMicros + timeout
+    uint32_t timeoutMicros = timeout;
 
     uint8_t targetState = (state ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
     // esperamos a que el pin salga de target state
     while (HAL_GPIO_ReadPin(port, pinMask) == targetState) {
-        if (micros() > timeoutMicros) return 0;
-        yield(); // allow FreeRTOS to run other tasks
+        if ((uint32_t)(micros() - startMicros) > timeoutMicros) return 0;
+        yield();
     }
 
     // esperamos a que el pin vuelva a entrar en target state
     while (HAL_GPIO_ReadPin(port, pinMask) != targetState) {
-        if (micros() > timeoutMicros) return 0;
+       if ((uint32_t)(micros() - startMicros) > timeoutMicros) return 0;
         yield();
     }
 
     // medimos el tiempo que el pin se mantiene en target state
     uint32_t pulseStart = micros();
     while (HAL_GPIO_ReadPin(port, pinMask) == targetState) {
-        if (micros() > timeoutMicros) return 0;
+        if ((uint32_t)(micros() - startMicros) > timeoutMicros) return 0;
         yield();
     }
     return micros() - pulseStart;
@@ -350,7 +352,14 @@ void stm32RadioLibHal::tone(uint32_t pin, unsigned int frequency, RadioLibTime_t
     GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
     HAL_GPIO_Init(port, &GPIO_InitStruct);
 
-    uint32_t timerClock = 80000000; // To-do: 80 MHz, sys clock is set to 80 MHz at the moment (nominal state). This will have to be changed when operational mode changes are implemented
+    // Compute timer clock correctly
+    uint32_t timerClock = HAL_RCC_GetPCLK1Freq();
+
+    // If APB1 prescaler > 1, timer clock is multiplied by 2
+    if ((RCC->CFGR & RCC_CFGR_PPRE1) != RCC_CFGR_PPRE1_DIV1) {
+        timerClock *= 2;
+    }
+    //uint32_t timerClock = 80000000; // To-do: 80 MHz, sys clock is set to 80 MHz at the moment (nominal state). This will have to be changed when operational mode changes are implemented
     uint32_t arr = (timerClock / frequency) - 1;
 
     __HAL_TIM_SET_PRESCALER(&htim2, 0);
