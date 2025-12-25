@@ -1,12 +1,11 @@
 
 /* ---- Includes ---- */
 
-#include "sx126x.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "comms.h"
-#include "radio.h"
 #include "radiolib_wrapper.h"
+#include "health.h"
 
 
 
@@ -21,8 +20,8 @@
 #define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
 #define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
 #define LORA_SYMBOL_TIMEOUT                 100       // Symbols
-#define LORA_FIX_LENGTH_PAYLOAD_ON          false
-#define LORA_IQ_INVERSION_ON                false
+#define LORA_FIX_LENGTH_PAYLOAD_ON          0
+#define LORA_IQ_INVERSION_ON                0
 
 //     Transmit message types 
 #define ACK_M     							2
@@ -32,6 +31,8 @@
 #define CAD_SYMBOL_NUM          LORA_CAD_02_SYMBOL
 #define CAD_DET_PEAK            23
 #define CAD_DET_MIN             1
+
+#define MODEM_LORA              1 // To-do: revise
 
 
 /* ---- Type definitions ---- */
@@ -56,11 +57,11 @@ typedef struct {
 } CommsPackets_t;
 
 typedef struct {
-    bool cadMode;
-    bool callbackFinished;
-    bool cadRx;
-    bool txAck;
-    bool txPayload;
+    int cadMode;
+    int callbackFinished;
+    int cadRx;
+    int txAck;
+    int txPayload;
 } CommsFlags_t;
 
 typedef struct {
@@ -84,11 +85,11 @@ static CommsPackets_t CommsPackets = {
 };
 
 static CommsFlags_t CommsFlags = {
-    .cadMode = true, // set to false in original code
-    .cadRx = false,
-    .callbackFinished = false,
-    .txAck = false,
-    .txPayload = false
+    .cadMode = 1, // set to 0 in original code
+    .cadRx = 0,
+    .callbackFinished = 0,
+    .txAck = 0,
+    .txPayload = 0
 };
 
 // COMMS configuration structure inicialization
@@ -138,7 +139,7 @@ void OnRxError( void );
 /*!
  * \brief Function executed on Radio CAD Done event
  */
-void OnCadDone( bool channelActivityDetected);
+void OnCadDone( int channelActivityDetected);
 
 /**
  * @brief Configures the SX1262 module with specified parameters.
@@ -159,7 +160,8 @@ void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F);
  * \param [in]  cadDetMin      Set the minimum symbol recognition for CAD
  * \param [in]  cadTimeout     Defines the timeout value to abort the CAD activity
  */
-void SX126xConfigureCad( RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout);
+// need to implement RadioLoRaCadSymbols_t
+// void SX126xConfigureCad( RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout);
 
 CommsState_t ProcessTelecommand();
 
@@ -244,16 +246,16 @@ void NextState(void) // CAMBIOS DE ESTADO SE HACEN AQUÍ
 void ProcessRadioCallbacks(void) 
 {
     while (!CommsFlags.callbackFinished) {
-        Radio.IrqProcess();
+        RadioLib_IrqProcess();
         vTaskDelay(pdMS_TO_TICKS(200));
     }
-    CommsFlags.callbackFinished = false;
+    CommsFlags.callbackFinished = 0;
 }
 
 // Unica funcio que esta en RADIOLIB
+// BoardInitMcu(); tret
 void Startup(void)
 {
-    BoardInitMcu();   
     RadioEvents.TxDone = OnTxDone; 
     RadioEvents.RxDone = OnRxDone; 
     RadioEvents.TxTimeout = OnTxTimeout;
@@ -271,7 +273,7 @@ void Startup(void)
         TX_OUTPUT_POWER,        // Potencia de transmissio
         LORA_BANDWIDTH,         // BW
         LORA_IQ_INVERSION_ON,   // IQ
-        true,                   // CRC ON
+        1,                   // CRC ON
         LORA_PREAMBLE_LENGTH);  // Sequencia la sincronitzacio
 
     RadioLib_SetRxConfig( // Configura els parametres de RX
@@ -279,7 +281,7 @@ void Startup(void)
         1,                      // CR
         LORA_BANDWIDTH,         // BW
         LORA_IQ_INVERSION_ON,   // IQ
-        true,                   // CRC ON
+        1,                   // CRC ON
         LORA_PREAMBLE_LENGTH) ; // Sequencia la sincronitzacio
 
 }
@@ -288,7 +290,7 @@ void Startup(void)
 //    COMMS_DEBUG_MODE -> constante <- HAVE TO IMPLEMENT
 void Sleep(void) 
 {   
-    Radio.Sleep();
+    RadioLib_Sleep();
     vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
 }
 
@@ -299,16 +301,17 @@ void Receive(void)
 {
     if (CommsFlags.cadMode) {
         if (CommsFlags.cadRx) {
-            Radio.Rx(CommsSettings.rxTime); // ** this case 
-            CommsFlags.cadRx = false;
+            RadioLib_Rx(CommsSettings.rxTime); // ** this case 
+            CommsFlags.cadRx = 0;
         }
         else {
-            Radio.StartCad();
+            // this is not available in wrapper
+            // radio.StartCad();
             vTaskDelay(pdMS_TO_TICKS(CommsSettings.rxTime));
         }
     }
     else {
-        Radio.Rx(CommsSettings.rxTime);
+        RadioLib_Rx(CommsSettings.rxTime);
 		vTaskDelay(pdMS_TO_TICKS(CommsSettings.rxTime)); // ** and this case look the same 
     }
 }
@@ -359,7 +362,7 @@ void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
     {
 		// COMMSNotUs++;
 		memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
-        Radio.Standby();
+        RadioLib_Standby();
 		CommsState = STANDBY;
     }
 }
@@ -372,7 +375,7 @@ void OnTxDone( void )
 // COMMSRxErrors
 void OnRxError( void )
 {
-    Radio.Standby();
+    RadioLib_Standby();
     CommsState = RECEIVE;
 }
 
@@ -386,18 +389,18 @@ void OnRxTimeout( void)
 
 void OnTxTimeout( void )
 {
-    Radio.Standby();
+    RadioLib_Standby();
     CommsState = STANDBY;
 }
 
-void OnCadDone( bool channelActivityDetected)
+void OnCadDone( int channelActivityDetected)
 {
-    if (channelActivityDetected == true) {
-        CommsFlags.cadRx = true;
+    if (channelActivityDetected == 1) {
+        CommsFlags.cadRx = 1;
         CommsState = RECEIVE; // If channel activity is detected stay in RECEIVE state
     }
     else {
-        Radio.Standby(); //
+        RadioLib_Standby();
         CommsState = SLEEP;
     }
 }
@@ -406,25 +409,27 @@ void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F)
 {
     /* Reads the SF, CR and time between packets variables from memory */
     /* Configuration of the LoRa frequency and TX and RX parameters */
-    Radio.SetChannel(RF_F);
-    Radio.SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH, SF, CR,
-                                    LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-                                    true, 0, 0, LORA_IQ_INVERSION_ON, 3000 );
+    RadioLib_SetChannel(RF_F);
+    // estam ya lo hacemos en setupComms
+    //RadioLib_SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH, SF, CR,
+    //                                LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
+    //                                1, 0, 0, LORA_IQ_INVERSION_ON, 3000 );
 
-    Radio.SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, SF, CR, 0, LORA_PREAMBLE_LENGTH,
-                                    LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
-                                    0, true, 0, 0, LORA_IQ_INVERSION_ON, true );
+    //RadioLib_SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, SF, CR, 0, LORA_PREAMBLE_LENGTH,
+    //                                LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
+    //                                0, 1, 0, 0, LORA_IQ_INVERSION_ON, 1 );
 
 }
 
-void SX126xConfigureCad(RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout)
-{   
-    SX126xSetDioIrqParams( 	IRQ_CAD_DONE | IRQ_CAD_ACTIVITY_DETECTED, IRQ_CAD_DONE | IRQ_CAD_ACTIVITY_DETECTED,
-                                    IRQ_RADIO_NONE, IRQ_RADIO_NONE );
+// // need to implement RadioLoRaCadSymbols_t
+// void SX126xConfigureCad(RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout)
+// {   
+//     SX126xSetDioIrqParams( 	IRQ_CAD_DONE | IRQ_CAD_ACTIVITY_DETECTED, IRQ_CAD_DONE | IRQ_CAD_ACTIVITY_DETECTED,
+//                                     IRQ_RADIO_NONE, IRQ_RADIO_NONE );
 
-    SX126xSetCadParams(cadSymbolNum, cadDetPeak, cadDetMin, LORA_CAD_RX, cadTimeout);
-    //THE TOTAL CAD TIMEOUT CAN BE EQUAL TO RX TIMEOUT (IT SHALL NOT BE HIGHER THAN 4 SECONDS)
-}
+//     SX126xSetCadParams(cadSymbolNum, cadDetPeak, cadDetMin, LORA_CAD_RX, cadTimeout);
+//     //THE TOTAL CAD TIMEOUT CAN BE EQUAL TO RX TIMEOUT (IT SHALL NOT BE HIGHER THAN 4 SECONDS)
+// }
 
 CommsState_t ProcessTelecommand() // function processes telecommand from RxData
 {
@@ -433,13 +438,13 @@ CommsState_t ProcessTelecommand() // function processes telecommand from RxData
     switch (tlcReceived) {
 
         case PING:
-            CommsFlags.txAck = true; //ACK acts as a ping
+            CommsFlags.txAck = 1; //ACK acts as a ping
             return TRANSMIT;
 
         case PAYLOAD_SEND_DATA: // acabar??
             // plsize=40; // PARA QUE ??
             // packetwindow=5; // D MOMENTO ES LA UNICA SITUACION I POR ESO NO SE USA
-            CommsFlags.txPayload = true;
+            CommsFlags.txPayload = 1;
             return TRANSMIT;
 
         default:
@@ -485,7 +490,8 @@ void Interleave(uint8_t *inputarr, int size)
     // Allocate temporary array to hold the interleaved result.
     uint8_t *temp =(uint8_t *) malloc(size * sizeof(uint8_t));
     if (temp == NULL) {
-        exit(EXIT_FAILURE);
+        // EXIT_FAILURE no definido
+        //exit(EXIT_FAILURE);
     }
 
     // For each index within the groups,
@@ -511,7 +517,8 @@ void Deinterleave(uint8_t *inputarr, int size)
     int groupSize = size / 6;
     uint8_t *temp =(uint8_t *) malloc(size * sizeof(uint8_t));
     if (temp == NULL) {
-        exit(EXIT_FAILURE);
+        // EXIT_FAILURE no definido
+        //exit(EXIT_FAILURE);
     }
 
     // Reconstruct the original groups.

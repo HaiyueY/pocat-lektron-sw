@@ -1,6 +1,7 @@
 #ifndef STM32_HAL_RADIOLIB_H
 #define STM32_HAL_RADIOLIB_H
 
+#include "main.h"
 #include "Hal.h" // RadioLibHal implementation
 #include "stm32l4xx_hal.h"
 
@@ -33,6 +34,9 @@ public:
     void noTone(uint32_t pin) override;
     void yield() override;
     uint32_t pinToInterrupt(uint32_t pin) override;
+
+    // interrupt handler
+    static void handleExtiCallback(uint16_t pin);
     
 private:
     SPI_HandleTypeDef* _spi;
@@ -42,7 +46,6 @@ private:
     uint16_t getPinMask(uint32_t pin);
     void enablePortClock(GPIO_TypeDef* port);
     static void (*_extiCallbacks[16])(void); // callbacks for EXTI lines 0-15
-    static void handleExtiCallback(uint16_t pin);
     static int getExtiLineFromPinMask(uint16_t pinMask);
 };
 

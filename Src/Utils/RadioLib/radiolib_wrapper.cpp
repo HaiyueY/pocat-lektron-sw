@@ -1,9 +1,12 @@
-#include <stdio.h>
 #include "radiolib_wrapper.h"
+
+/* C++ headers */
+#include <RadioLib.h>
 #include "stm32_radiolib_hal.h"
 
+
 // Instantiate C++ outside of extern "C"
-static stm32RadioLibHal hal(&hspi2);  
+static stm32RadioLibHal hal(&hspi1);  
 
 static Module mod(&hal, 1, 2, 3, 4); // TODO: change pins to actual ones (these are made up) NSS, DIO1, BUSY, RESET
 static SX1262 radio(&mod);
@@ -35,81 +38,90 @@ extern "C" { // to stop name mangling
     }
 
     void RadioLib_SetTxConfig(uint8_t sf, uint8_t cr, int8_t power,
-                          uint8_t bw_code, bool iqInverted,
-                          bool crcOn, uint16_t preambleLen) {
+                            uint8_t bw, int iqInverted,
+                            int crcOn, uint16_t preambleLen)
+    {
         int state;
+
+        // Set output power
+        state = radio.setOutputPower(power);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
+        }
+
+        // Set spreading factor
         state = radio.setSpreadingFactor(sf);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
-        state = radio.setCodingRate(cr + 4); //Radiolib es sumen 4 al CR
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del CR: %d\n", state);
+
+        // Set coding rate (RadioLib CR uses values 5–8)
+        state = radio.setCodingRate(cr + 4);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
-        state = radio.setTxPower(power);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del Power: %d\n", state);
+
+        // Set bandwidth
+        state = radio.setBandwidth(bw);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
-        state = radio.setBandwidth(bw_code); //Ha de estar en kHz, no en indexos com Semtech
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del BW: %d\n", state);
-        }
-        state = radio.setIQInverted(iqInverted);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del IQ: %d\n", state);
-        }
+
+        // CRC enable/disable
         state = radio.setCRC(crcOn);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del CRC: %d\n", state);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
+
+        // Preamble length
         state = radio.setPreambleLength(preambleLen);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del Preamble Length: %d\n", state);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
+
+        // Note: IQ inversion is not a separate method in RadioLib SX1262
+        // If needed, handle in modulation settings or ignore.
     }
 
-    void RadioLib_SetRxConfig(uint8_t sf, uint8_t cr, uint8_t bw_code,
-                          bool iqInverted, bool crcOn,
-                          uint16_t preambleLen) {
+    void RadioLib_SetRxConfig(uint8_t sf, uint8_t cr, uint8_t bw,
+                            int iqInverted, int crcOn,
+                            uint16_t preambleLen)
+    {
         int state;
+
+        // Set spreading factor
         state = radio.setSpreadingFactor(sf);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
-        state = radio.setCodingRate(cr + 4); //Radiolib es sumen 4 al CR
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
+
+        // Set coding rate
+        state = radio.setCodingRate(cr + 4);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
-        state = radio.setBandwidth(bw_code); //Ha de estar en kHz, no en indexos com Semtech
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
+
+        // Set bandwidth
+        state = radio.setBandwidth(bw);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
-        state = radio.setIQInverted(iqInverted);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
-        }
+
+        // CRC enable/disable
         state = radio.setCRC(crcOn);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
+
+        // Preamble length
         state = radio.setPreambleLength(preambleLen);
-        if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la configuracio del SF: %d\n", state);
+        if (state != RADIOLIB_ERR_NONE) {
+            // Handle error
         }
+
+        // Note: IQ inversion doesn’t have a separate setter in RadioLib SX1262
     }
+
 
     int16_t RadioLib_Rx(uint32_t timeoutMs) {
         //return radio.startReceive(timeoutMs); Aquesta es la manera de ferho no bloquejant
@@ -177,11 +189,11 @@ extern "C" { // to stop name mangling
     int16_t RadioLib_StartCad(void) {  // Ens cal realment aquesta funcio??
         int16_t st = radio.scanChannel();
 
-        bool detected = false;
+        int detected = 0;
         if(st == RADIOLIB_LORA_DETECTED) {
-            detected = true;
+            detected = 1;
         } else if(st == RADIOLIB_CHANNEL_FREE) {
-           detected = false;
+           detected = 0;
         } else {
            // La resta d'errors s'han de tractar aqui
         }

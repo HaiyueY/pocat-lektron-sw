@@ -7,11 +7,8 @@
 
 /* ---- Module-level variables ---- */
 static TaskHandle_t obc_task_handle;
+IWDG_HandleTypeDef hiwdg;
 
-// peripheral variables
-SPI_HandleTypeDef hspi1; // might have to change it, picked spi1 for radiolib, but it might have to be another
-TIM_HandleTypeDef htim2;
-TIM_HandleTypeDef htim5; // timer for micros()
 
 /* ---- Private function prototypes ---- */
 static void SystemClock_Config(void);
@@ -19,8 +16,11 @@ static void MX_SPI2_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_IWDG_Init(void);
+static void MX_IWDG_Init(void);
 
 
+// To-do: configure CubeMX to generate code taking into account we are using FreeRTOS
 int main(void)
 {
 
@@ -30,14 +30,15 @@ int main(void)
     MX_SPI1_Init(); // SPI initialization
     MX_TIM5_Init(); // Timer will be used for micros()
     MX_TIM2_Init();
+    MX_IWDG_Init(); // HW watchdog initialization
 
 
     HAL_TIM_Base_Start(&htim5);
 
-    int res = prova();
-    if(res == 0) {
-        prova_send("Hola nanosat!");
-    }
+    // int res = prova();
+    // if(res == 0) {
+    //     prova_send("Hola nanosat!");
+    // }
 
     printf("*********************************\r\n");
     printf(" PoCat FLIGHT SOFTWARE\r\n");
@@ -73,10 +74,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 1;
   RCC_OscInitStruct.PLL.PLLN = 10;
@@ -103,6 +104,34 @@ void SystemClock_Config(void)
   }
 }
 
+/**
+  * @brief IWDG Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_IWDG_Init(void) // To-do: this here is default configuration, revise
+{
+
+  /* USER CODE BEGIN IWDG_Init 0 */
+
+  /* USER CODE END IWDG_Init 0 */
+
+  /* USER CODE BEGIN IWDG_Init 1 */
+
+  /* USER CODE END IWDG_Init 1 */
+  hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+  hiwdg.Init.Window = 4095;
+  hiwdg.Init.Reload = 4095;
+  if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN IWDG_Init 2 */
+
+  /* USER CODE END IWDG_Init 2 */
+
+}
 
 /**
   * @brief SPI1 Initialization Function

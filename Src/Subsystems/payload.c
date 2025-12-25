@@ -2,6 +2,7 @@
 /* ---- Includes ---- */
 #include "FreeRTOS.h"
 #include "main.h"
+#include "health.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -26,6 +27,7 @@ void payload_task(void *pv_parameters) {
 
     for (;;) {
         process_payload();
+        health_kick(HEALTH_BIT_PAYLOAD);
     }
 
 }

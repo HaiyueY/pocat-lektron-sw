@@ -1,13 +1,22 @@
 #ifndef INC_WRAPPER_H
 #define INC_WRAPPER_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
-
-#include "main.h"
-#include "RadioLib.h"
-
 extern "C" {
 #endif
+
+
+typedef struct {
+    void (*TxDone)(void); // Transmissio acabada
+    void (*RxDone)(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr); // Recepcio acabada
+    void (*TxTimeout)(void); // Timeout de transmissio
+    void (*RxTimeout)(void); // Timeout de recepcio
+    void (*RxError)(void); // Error de recepcio
+    void (*CadDone)(int channelActivityDetected); // Deteccio de canal acabada
+} RadioEvents_t;
+
 
 void RadioLib_Init(RadioEvents_t *events); // Inicialitza la radio i assigna els callbacks
 
@@ -18,16 +27,16 @@ void RadioLib_SetTxConfig(     // El CR de radioLib es diferente al de SX1262Con
     uint8_t cr, // Coding Rate, controla la correccio d'errors
     int8_t power, // Potencia de transmissio
     uint8_t bw_code, // Bandwidth, controla l'amplada de banda
-    bool iqInverted, // Inversio de la senyal IQ (evitar colisions)
-    bool crcOn, // Activar CRC (checksum per errors)
+    int iqInverted, // Inversio de la senyal IQ (evitar colisions)
+    int crcOn, // Activar CRC (checksum per errors)
     uint16_t preambleLen); //Sequencia la sincronitzacio
 
 void RadioLib_SetRxConfig( // Configura els parametres de RX
     uint8_t sf, // Spreading Factor, controla la sensibilitat i el abast
     uint8_t cr, // Coding Rate, controla la correccio d'errors
     uint8_t bw_code, // Bandwidth, controla l'amplada de banda
-    bool iqInverted, // Inversio de la senyal IQ (evitar colisions)
-    bool crcOn, // Activar CRC (checksum per errors)
+    int iqInverted, // Inversio de la senyal IQ (evitar colisions)
+    int crcOn, // Activar CRC (checksum per errors)
     uint16_t preambleLen); //Sequencia la sincronitzacio
 
 void RadioLib_Send(uint8_t *buf, uint16_t len); // Envia les dades
@@ -38,21 +47,9 @@ int16_t RadioLib_Sleep(void); // Entra en mode sleep
 
 int16_t RadioLib_Standby(void); // Entra en mode standby
 
-int RadioLib_StartCad(void); // Comença la detecció de canal. Ens cal realment aquesta funcio??
+int16_t RadioLib_StartCad(void); // Comença la detecció de canal. Ens cal realment aquesta funcio??
 
 void RadioLib_IrqProcess(void); // Funcio que no fa res pq radiolib ja fa la seva gestio, pero aixi corregim menys codi
-
-
-typedef struct {
-    void (*TxDone)(void); // Transmissio acabada
-    void (*RxDone)(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr); // Recepcio acabada
-    void (*TxTimeout)(void); // Timeout de transmissio
-    void (*RxTimeout)(void); // Timeout de recepcio
-    void (*RxError)(void); // Error de recepcio
-    void (*CadDone)(bool channelActivityDetected); // Deteccio de canal acabada
-} RadioEvents_t;
-
-
 
 #ifdef __cplusplus
 }

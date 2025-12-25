@@ -12,6 +12,7 @@
 #include "comms.h"
 #include "obdh.h"
 #include "payload.h"
+#include "health_mgr.h"
 
 /* ---- Macros and constants ---- */
 #define COMMS_STACK_SIZE 3000
@@ -27,18 +28,29 @@ static TaskHandle_t payload_task_handle;
 static TaskHandle_t eps_task_handle;
 static TaskHandle_t comms_task_handle;
 static TaskHandle_t obdh_task_handle;
-// ...
+
 
 /* ---- Private function prototypes ---- */
 static void setup_obc(void);
 static void process_obc(ObcState_t *currentState);
 // static void create_queues(void);  // TODO: implement this function
-static void create_tasks(void);
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState);
 static void check_notifications(void);
 static void change_state_if_needed(void);
 static uint32_t waitForNotification(void);
 static void handlePayloadCapture(void);
+static void health_check(void);
+static BaseType_t create_payload_task(void);
+static BaseType_t create_eps_task(void);
+static BaseType_t create_comms_task(void);
+static BaseType_t create_obdh_task(void);
+
+void reset_payload_task(void);
+void reset_eps_task(void);
+void reset_comms_task(void);
+void reset_obdh_task(void);
+
+void pet_watchdog(void);
 
 // a considerar/eliminar:
 static ObcState_t currentState;
@@ -51,6 +63,7 @@ void obc_task(void *pv_parameters) {
 
     for (;;) {
         process_obc(&currentState);
+        health_check();
     }
 
 }
@@ -64,18 +77,27 @@ static void setup_obc(void) {
     // create_queues();  // TODO: implement this function
 
     // 2. Create tasks
-    create_tasks();
-
-}
-
-static void create_tasks(void) {
-
-    xTaskCreate(payload_task, "PAYLOAD", PAYLOAD_STACK_SIZE, NULL, PAYLOAD_PRIORITY, &payload_task_handle);
-    xTaskCreate(eps_task, "EPS", EPS_STACK_SIZE, NULL, EPS_PRIORITY, &eps_task_handle);
-    xTaskCreate(comms_task, "COMMS", COMMS_STACK_SIZE, NULL, COMMS_PRIORITY, &comms_task_handle);
-    xTaskCreate(obdh_task, "OBDH", OBDH_STACK_SIZE, NULL, OBDH_PRIORITY, &obdh_task_handle);
+    BaseType_t ok = create_payload_task();
+    if (ok != pdPASS)
+    {
+        // error
+    }
+    ok = create_eps_task();
+    if (ok != pdPASS)
+    {
+        // error
+    }
+    ok = create_comms_task();
+    if (ok != pdPASS)
+    {
+        // error
+    }
+    ok = create_obdh_task();
+    if (ok != pdPASS)
+    {
+        // error
+    }
     // ..
-    
 }
 
 static void check_notifications(void) {
@@ -152,6 +174,146 @@ ObcState_t Nominal(void) {
         // ... handle other events
 	}
 }
+
+// For now what we will do is:
+// if system is not healthy, we restart the tasks that are faulty.
+// if the system keeps being unhealthy hw watchdog will end up restarting the whole system
+void health_check(void) {
+    EventBits_t faults = system_health();
+
+    if (faults != 0) 
+    {
+        if (faults & HEALTH_BIT_EPS) {
+            reset_eps_task();
+            printf("EPS task reset due to health check\r\n");
+        }
+        if (faults & HEALTH_BIT_COMMS) {
+            reset_comms_task();
+            printf("COMMS task reset due to health check\r\n");
+        }
+        if (faults & HEALTH_BIT_PAYLOAD) {
+            reset_payload_task();
+            printf("PAYLOAD task reset due to health check\r\n");
+        }
+        if (faults & HEALTH_BIT_OBDH) {
+            reset_obdh_task();
+            printf("OBDH task reset due to health check\r\n");
+        }
+    }
+    else
+    {
+        pet_watchdog();
+    }
+}
+
+
+static BaseType_t create_payload_task(void)
+{
+    return xTaskCreate(payload_task, "PAYLOAD", PAYLOAD_STACK_SIZE, NULL, PAYLOAD_PRIORITY, &payload_task_handle);
+}
+
+static BaseType_t create_eps_task(void)
+{
+    return xTaskCreate(eps_task, "EPS", EPS_STACK_SIZE, NULL, EPS_PRIORITY, &eps_task_handle);
+}
+
+static BaseType_t create_comms_task(void)
+{
+    return xTaskCreate(comms_task, "COMMS", COMMS_STACK_SIZE, NULL, COMMS_PRIORITY, &comms_task_handle);
+}
+
+static BaseType_t create_obdh_task(void)
+{
+    return xTaskCreate(obdh_task, "OBDH", OBDH_STACK_SIZE, NULL, OBDH_PRIORITY, &obdh_task_handle);
+}
+
+void reset_payload_task(void)
+{
+    if (payload_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(payload_task_handle);
+    vTaskDelete(payload_task_handle);
+    payload_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_payload_task();
+    if (ok != pdPASS)
+    {
+        // error
+    }
+}
+
+void reset_eps_task(void)
+{
+    if (eps_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(eps_task_handle);
+    vTaskDelete(eps_task_handle);
+    eps_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_eps_task();
+    if (ok != pdPASS)
+    {
+        // error
+    }
+}
+
+void reset_comms_task(void)
+{
+    if (comms_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(comms_task_handle);
+    vTaskDelete(comms_task_handle);
+    comms_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_comms_task();
+
+    if (ok != pdPASS)
+    {
+        // error
+    }
+}
+
+void reset_obdh_task(void)
+{
+    if (obdh_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(obdh_task_handle);
+    vTaskDelete(obdh_task_handle);
+    obdh_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_obdh_task();
+
+    if (ok != pdPASS)
+    {
+        // error
+    }
+}
+
+void pet_watchdog(void)
+{
+    HAL_IWDG_Refresh(&hiwdg);
+}
+
 
 
 // REVISAR!!

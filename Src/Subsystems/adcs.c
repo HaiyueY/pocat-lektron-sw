@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "adcs.h"
+#include "health.h"
 
 /* ---- Macros and constants ---- */
 #define ADCS_DETUMBLING_MODE (1 << 0)

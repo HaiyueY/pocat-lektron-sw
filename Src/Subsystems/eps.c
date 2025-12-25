@@ -1,5 +1,6 @@
 #include "eps.h"
 #include <stdio.h>
+#include "health.h"
 
 // The main functionality of the EPS task is providing the OBC with battery readings on 
 // it's voltage, current generated, capacity, temperature and charging status. The task 

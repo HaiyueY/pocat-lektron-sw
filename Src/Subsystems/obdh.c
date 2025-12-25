@@ -5,6 +5,8 @@
 /* ---- Includes ---- */
 #include "obdh.h"
 #include <stdio.h>
+#include "health.h"
+
 
 /* ---- Macros and constants ---- */
 // ..
@@ -28,6 +30,7 @@ void obdh_task(void *pv_parameters) {
 
     for (;;) {
         process_obdh();
+        health_kick(HEALTH_BIT_OBDH);
     }
 
 }

@@ -138,18 +138,20 @@ void UsageFault_Handler(void)
   }
 }
 
+
+// already defined in FreeRTOS
 /**
   * @brief This function handles System service call via SWI instruction.
   */
-void SVC_Handler(void)
-{
-  /* USER CODE BEGIN SVCall_IRQn 0 */
+// void SVC_Handler(void)
+// {
+//   /* USER CODE BEGIN SVCall_IRQn 0 */
 
-  /* USER CODE END SVCall_IRQn 0 */
-  /* USER CODE BEGIN SVCall_IRQn 1 */
+//   /* USER CODE END SVCall_IRQn 0 */
+//   /* USER CODE BEGIN SVCall_IRQn 1 */
 
-  /* USER CODE END SVCall_IRQn 1 */
-}
+//   /* USER CODE END SVCall_IRQn 1 */
+// }
 
 /**
   * @brief This function handles Debug monitor.
@@ -164,32 +166,35 @@ void DebugMon_Handler(void)
   /* USER CODE END DebugMonitor_IRQn 1 */
 }
 
-/**
-  * @brief This function handles Pendable request for system service.
-  */
-void PendSV_Handler(void)
-{
-  /* USER CODE BEGIN PendSV_IRQn 0 */
+// already defined in FreeRTOS
+// /**
+//   * @brief This function handles Pendable request for system service.
+//   */
+// void PendSV_Handler(void)
+// {
+//   /* USER CODE BEGIN PendSV_IRQn 0 */
 
-  /* USER CODE END PendSV_IRQn 0 */
-  /* USER CODE BEGIN PendSV_IRQn 1 */
+//   /* USER CODE END PendSV_IRQn 0 */
+//   /* USER CODE BEGIN PendSV_IRQn 1 */
 
-  /* USER CODE END PendSV_IRQn 1 */
-}
+//   /* USER CODE END PendSV_IRQn 1 */
+// }
 
-/**
-  * @brief This function handles System tick timer.
-  */
-void SysTick_Handler(void)
-{
-  /* USER CODE BEGIN SysTick_IRQn 0 */
 
-  /* USER CODE END SysTick_IRQn 0 */
-  HAL_IncTick();
-  /* USER CODE BEGIN SysTick_IRQn 1 */
+// already defined in FreeRTOS
+// /**
+//   * @brief This function handles System tick timer.
+//   */
+// void SysTick_Handler(void)
+// {
+//   /* USER CODE BEGIN SysTick_IRQn 0 */
 
-  /* USER CODE END SysTick_IRQn 1 */
-}
+//   /* USER CODE END SysTick_IRQn 0 */
+//   HAL_IncTick();
+//   /* USER CODE BEGIN SysTick_IRQn 1 */
+
+//   /* USER CODE END SysTick_IRQn 1 */
+// }
 
 /******************************************************************************/
 /* STM32L4xx Peripheral Interrupt Handlers                                    */
@@ -201,35 +206,35 @@ void SysTick_Handler(void)
 /* USER CODE BEGIN 1 */
 
 
-extern "C" void EXTI0_IRQHandler(void)
+void EXTI0_IRQHandler(void)
 {
   if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0)) {
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   }
 }
 
-extern "C" void EXTI1_IRQHandler(void)
+void EXTI1_IRQHandler(void)
 {
   if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_1)) {
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
   }
 }
 
-extern "C" void EXTI2_IRQHandler(void)
+void EXTI2_IRQHandler(void)
 {
   if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2)) {
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
   }
 }
 
-extern "C" void EXTI3_IRQHandler(void)
+void EXTI3_IRQHandler(void)
 {
   if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_3)) {
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
   }
 }
 
-extern "C" void EXTI4_IRQHandler(void)
+void EXTI4_IRQHandler(void)
 {
   if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_4)) {
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
@@ -237,7 +242,7 @@ extern "C" void EXTI4_IRQHandler(void)
 }
 
 
-extern "C" void EXTI9_5_IRQHandler(void)
+void EXTI9_5_IRQHandler(void)
 {
   for (uint32_t line = 5; line <= 9; ++line) {
     uint16_t mask = (uint16_t)(1u << line);
@@ -247,7 +252,7 @@ extern "C" void EXTI9_5_IRQHandler(void)
   }
 }
 
-extern "C" void EXTI15_10_IRQHandler(void)
+void EXTI15_10_IRQHandler(void)
 {
   for (uint32_t line = 10; line <= 15; ++line) {
     uint16_t mask = (uint16_t)(1u << line);
