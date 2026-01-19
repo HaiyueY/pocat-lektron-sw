@@ -97,7 +97,7 @@ static void setup_obc(void) {
     {
         // error
     }
-    // ..
+    health_init();
 }
 
 static void check_notifications(void) {
@@ -311,7 +311,7 @@ void reset_obdh_task(void)
 
 void pet_watchdog(void)
 {
-    HAL_IWDG_Refresh(&hiwdg);
+    HAL_IWDG_Refresh(&hiwdg); 
 }
 
 

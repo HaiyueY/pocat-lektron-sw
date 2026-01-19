@@ -145,9 +145,8 @@ void stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb
     if (line < 0 || line > 15) { // validate line
         return;    // invalid pin
     }
-    
-    // what is this for??   
-    __HAL_RCC_SYSCFG_CLK_ENABLE();
+
+    __HAL_RCC_SYSCFG_CLK_ENABLE(); // review
 
     // configure GPIO
     GPIO_InitTypeDef GPIO_InitStruct = {0};

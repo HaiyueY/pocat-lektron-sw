@@ -30,19 +30,12 @@ int main(void)
     MX_SPI1_Init(); // SPI initialization
     MX_TIM5_Init(); // Timer will be used for micros()
     MX_TIM2_Init();
-    MX_IWDG_Init(); // HW watchdog initialization
+    //MX_IWDG_Init(); // HW watchdog initialization
 
 
     HAL_TIM_Base_Start(&htim5);
 
-    // int res = prova();
-    // if(res == 0) {
-    //     prova_send("Hola nanosat!");
-    // }
-
-    printf("*********************************\r\n");
-    printf(" PoCat FLIGHT SOFTWARE\r\n");
-    printf("*********************************\r\n");
+    printf("pocat flight software\r\n");
 
     xTaskCreate(obc_task, "OBC", OBC_STACK_SIZE, NULL, OBC_PRIORITY, &obc_task_handle);
 
@@ -74,16 +67,31 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  // RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  // RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  // RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  // commented temporarily because watchdog is not working..
+  // RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+  // RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  // RCC_OscInitStruct.PLL.PLLM = 1;
+  // RCC_OscInitStruct.PLL.PLLN = 10;
+  // RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  // RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  // RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+
+  // disable watchdog temporarily (default witout watchdog...)
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 1;
   RCC_OscInitStruct.PLL.PLLN = 10;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  // temp
+
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
