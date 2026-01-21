@@ -1,0 +1,75 @@
+\doxysection{/c/\+Users/otuam/\+Desktop/\+Nanosat/pocat-\/lektron-\/sw/src/subsystems/obc.c File Reference}
+\hypertarget{obc_8c}{}\label{obc_8c}\index{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/src/subsystems/obc.c@{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/src/subsystems/obc.c}}
+
+
+OBC Task serves as the central scheduler, coordinating the operation of all other tasks. It is responsible for managing transitions between different operational modes, task scheduling, power control, and essential satellite checkups.  
+
+
+{\ttfamily \#include $<$stdint.\+h$>$}\newline
+{\ttfamily \#include "{}obc.\+h"{}}\newline
+{\ttfamily \#include "{}Free\+RTOS.\+h"{}}\newline
+{\ttfamily \#include "{}task.\+h"{}}\newline
+{\ttfamily \#include "{}main.\+h"{}}\newline
+{\ttfamily \#include "{}eps.\+h"{}}\newline
+{\ttfamily \#include "{}comms.\+h"{}}\newline
+{\ttfamily \#include "{}obdh.\+h"{}}\newline
+{\ttfamily \#include "{}payload.\+h"{}}\newline
+{\ttfamily \#include "{}health\+\_\+mgr.\+h"{}}\newline
+{\ttfamily \#include "{}log.\+h"{}}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{obc_8c_afa2e914856189b8aefd37d9cca00e0a2}\label{obc_8c_afa2e914856189b8aefd37d9cca00e0a2} 
+\#define {\bfseries COMMS\+\_\+\+STACK\+\_\+\+SIZE}~3000
+\item 
+\Hypertarget{obc_8c_ad23f81609eaba34b1b30ae72750b45b3}\label{obc_8c_ad23f81609eaba34b1b30ae72750b45b3} 
+\#define {\bfseries COMMS\+\_\+\+PRIORITY}~1
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Enumerations}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{obc_8c_a64a3a50e1df85b2a040e438ffed620c4}\label{obc_8c_a64a3a50e1df85b2a040e438ffed620c4} 
+enum {\bfseries Obc\+State\+\_\+t} \{ {\bfseries NOMINAL}
+ \}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{obc_8c_a53443e617693e9c14fb17546530bf27e}\label{obc_8c_a53443e617693e9c14fb17546530bf27e} 
+void {\bfseries reset\+\_\+payload\+\_\+task} (void)
+\item 
+\Hypertarget{obc_8c_aedb7db3aa3431caa7e979e1a00c6a714}\label{obc_8c_aedb7db3aa3431caa7e979e1a00c6a714} 
+void {\bfseries reset\+\_\+eps\+\_\+task} (void)
+\item 
+\Hypertarget{obc_8c_a7e193300a914119689c7e984f932b40a}\label{obc_8c_a7e193300a914119689c7e984f932b40a} 
+void {\bfseries reset\+\_\+comms\+\_\+task} (void)
+\item 
+\Hypertarget{obc_8c_aa53364959597ff0904888e070deb624c}\label{obc_8c_aa53364959597ff0904888e070deb624c} 
+void {\bfseries reset\+\_\+obdh\+\_\+task} (void)
+\item 
+\Hypertarget{obc_8c_a5d919956caf9b8404b275d995b6fbc55}\label{obc_8c_a5d919956caf9b8404b275d995b6fbc55} 
+void {\bfseries pet\+\_\+watchdog} (void)
+\item 
+\Hypertarget{obc_8c_a8fe1b1a9a93a8c9afc66585dc19d03a9}\label{obc_8c_a8fe1b1a9a93a8c9afc66585dc19d03a9} 
+void {\bfseries obc\+\_\+task} (void \texorpdfstring{$\ast$}{*}pv\+\_\+parameters)
+\begin{DoxyCompactList}\small\item\em Communications task function, it runs the OBC state machine. \end{DoxyCompactList}\item 
+\Hypertarget{obc_8c_aa519b76031028a90df81fde4fc1313bc}\label{obc_8c_aa519b76031028a90df81fde4fc1313bc} 
+Obc\+State\+\_\+t {\bfseries Nominal} (void)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+OBC Task serves as the central scheduler, coordinating the operation of all other tasks. It is responsible for managing transitions between different operational modes, task scheduling, power control, and essential satellite checkups. 
+
+\begin{DoxyAuthor}{Author}
+\href{mailto:guillermo.o.tuama@estudiantat.upc.edu}{\texttt{guillermo.\+o.\+tuama@estudiantat.\+upc.\+edu}} 
+\end{DoxyAuthor}
+\begin{DoxyVersion}{Version}
+0.\+1 
+\end{DoxyVersion}
+\begin{DoxyDate}{Date}
+2026-\/01-\/20
+\end{DoxyDate}
+\begin{DoxyCopyright}{Copyright}
+Copyright (c) 2026 
+\end{DoxyCopyright}

@@ -13,6 +13,15 @@ static SX1262 radio(&mod);
 
 static RadioEvents_t* radioEventsPtr = nullptr;
 
+static float bwCodeToKHz(uint8_t bw_code) {
+  switch(bw_code) {
+    case 0: return 125.0f;
+    case 1: return 250.0f;
+    case 2: return 500.0f;
+    default: return 125.0f;
+  }
+}
+
 extern "C" { // to stop name mangling
 
     void RadioLib_Init(RadioEvents_t *events) {
@@ -62,7 +71,7 @@ extern "C" { // to stop name mangling
         }
 
         // Set bandwidth
-        state = radio.setBandwidth(bw);
+        state = radio.setBandwidth(bwCodeToKHz(bw));
         if (state != RADIOLIB_ERR_NONE) {
             // Handle error
         }
@@ -102,7 +111,7 @@ extern "C" { // to stop name mangling
         }
 
         // Set bandwidth
-        state = radio.setBandwidth(bw);
+        state = radio.setBandwidth(bwCodeToKHz(bw));
         if (state != RADIOLIB_ERR_NONE) {
             // Handle error
         }
@@ -186,7 +195,7 @@ extern "C" { // to stop name mangling
         return radio.standby();
     }
 
-    int16_t RadioLib_StartCad(void) {  // Ens cal realment aquesta funcio??
+    int16_t RadioLib_StartCad(void) {  // Es fa servir per CAD real
         int16_t st = radio.scanChannel();
 
         int detected = 0;

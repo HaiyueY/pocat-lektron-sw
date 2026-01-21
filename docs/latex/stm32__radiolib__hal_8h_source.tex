@@ -1,0 +1,58 @@
+\doxysection{stm32\+\_\+radiolib\+\_\+hal.\+h}
+\hypertarget{stm32__radiolib__hal_8h_source}{}\label{stm32__radiolib__hal_8h_source}\index{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/include/utils/RadioLib/stm32\_radiolib\_hal.h@{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/include/utils/RadioLib/stm32\_radiolib\_hal.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ STM32\_HAL\_RADIOLIB\_H}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ STM32\_HAL\_RADIOLIB\_H}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ "{}\mbox{\hyperlink{main_8h}{main.h}}"{}}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ "{}Hal.h"{}}\ \textcolor{comment}{//\ RadioLibHal\ implementation}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ "{}stm32l4xx\_hal.h"{}}}
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{keyword}{class\ }stm32RadioLibHal\ :\ \textcolor{keyword}{public}\ RadioLibHal\ \{}
+\DoxyCodeLine{00009\ \textcolor{keyword}{public}:}
+\DoxyCodeLine{00010\ \ \ \ \ stm32RadioLibHal(SPI\_HandleTypeDef*\ spi);}
+\DoxyCodeLine{00011\ \ \ \ \ }
+\DoxyCodeLine{00012\ \ \ \ \ \textcolor{comment}{//\ Pure\ virtual\ methods\ -\/\ MUST\ implement}}
+\DoxyCodeLine{00013\ \ \ \ \ \textcolor{comment}{//\ implementations\ of\ pure\ virtual\ RadioLibHal\ methods}}
+\DoxyCodeLine{00014\ \ \ \ \ \textcolor{keywordtype}{void}\ pinMode(uint32\_t\ pin,\ uint32\_t\ mode)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keywordtype}{void}\ digitalWrite(uint32\_t\ pin,\ uint32\_t\ value)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00016\ \ \ \ \ uint32\_t\ digitalRead(uint32\_t\ pin)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00017\ \ \ \ \ \textcolor{keywordtype}{void}\ attachInterrupt(uint32\_t\ interruptNum,\ \textcolor{keywordtype}{void}\ (*interruptCb)(\textcolor{keywordtype}{void}),\ uint32\_t\ mode)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00018\ \ \ \ \ \textcolor{keywordtype}{void}\ detachInterrupt(uint32\_t\ interruptNum)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00019\ \ \ \ \ \textcolor{keywordtype}{void}\ delay(RadioLibTime\_t\ ms)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00020\ \ \ \ \ \textcolor{keywordtype}{void}\ delayMicroseconds(RadioLibTime\_t\ us)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00021\ \ \ \ \ RadioLibTime\_t\ millis()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00022\ \ \ \ \ RadioLibTime\_t\ micros()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00023\ \ \ \ \ \textcolor{keywordtype}{long}\ pulseIn(uint32\_t\ pin,\ uint32\_t\ state,\ RadioLibTime\_t\ timeout)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00024\ \ \ \ \ \textcolor{keywordtype}{void}\ spiBegin()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keywordtype}{void}\ spiBeginTransaction()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00026\ \ \ \ \ \textcolor{keywordtype}{void}\ spiTransfer(uint8\_t*\ out,\ \textcolor{keywordtype}{size\_t}\ len,\ uint8\_t*\ in)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00027\ \ \ \ \ \textcolor{keywordtype}{void}\ spiEndTransaction()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00028\ \ \ \ \ \textcolor{keywordtype}{void}\ spiEnd()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00030\ \ \ \ \ \textcolor{comment}{//\ implementations\ of\ virtual\ RadioLibHal\ methods}}
+\DoxyCodeLine{00031\ \ \ \ \ \textcolor{keywordtype}{void}\ init()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00032\ \ \ \ \ \textcolor{keywordtype}{void}\ term()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00033\ \ \ \ \ \textcolor{keywordtype}{void}\ tone(uint32\_t\ pin,\ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ frequency,\ RadioLibTime\_t\ duration\ =\ 0)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00034\ \ \ \ \ \textcolor{keywordtype}{void}\ noTone(uint32\_t\ pin)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00035\ \ \ \ \ \textcolor{keywordtype}{void}\ yield()\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00036\ \ \ \ \ uint32\_t\ pinToInterrupt(uint32\_t\ pin)\ \textcolor{keyword}{override};}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00038\ \ \ \ \ \textcolor{comment}{//\ interrupt\ handler}}
+\DoxyCodeLine{00039\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{void}\ handleExtiCallback(uint16\_t\ pin);}
+\DoxyCodeLine{00040\ \ \ \ \ }
+\DoxyCodeLine{00041\ \textcolor{keyword}{private}:}
+\DoxyCodeLine{00042\ \ \ \ \ SPI\_HandleTypeDef*\ \_spi;}
+\DoxyCodeLine{00043\ \ \ \ \ uint32\_t\ \_startMillis;}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \ \ \ \ GPIO\_TypeDef*\ getPort(uint32\_t\ pin);}
+\DoxyCodeLine{00046\ \ \ \ \ uint16\_t\ getPinMask(uint32\_t\ pin);}
+\DoxyCodeLine{00047\ \ \ \ \ \textcolor{keywordtype}{void}\ enablePortClock(GPIO\_TypeDef*\ port);}
+\DoxyCodeLine{00048\ \ \ \ \ \textcolor{keyword}{static}\ void\ (*\_extiCallbacks[16])(void);\ \textcolor{comment}{//\ callbacks\ for\ EXTI\ lines\ 0-\/15}}
+\DoxyCodeLine{00049\ \ \ \ \ \textcolor{keyword}{static}\ \textcolor{keywordtype}{int}\ getExtiLineFromPinMask(uint16\_t\ pinMask);}
+\DoxyCodeLine{00050\ \};}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

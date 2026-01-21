@@ -1,6 +1,15 @@
-// OBC Task serves as the central scheduler, coordinating the operation of all other tasks. 
-// It is responsible for managing transitions between different operational modes, task scheduling, 
-// power control, and essential satellite checkups.
+/**
+ * @file obc.c
+ * @author guillermo.o.tuama@estudiantat.upc.edu
+ * @brief OBC Task serves as the central scheduler, coordinating the operation of all other tasks. 
+    It is responsible for managing transitions between different operational modes, task scheduling, 
+    power control, and essential satellite checkups.
+ * @version 0.1
+ * @date 2026-01-20
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
 
 /* ---- Includes ---- */
 #include <stdint.h> //mirar
@@ -13,10 +22,8 @@
 #include "obdh.h"
 #include "payload.h"
 #include "health_mgr.h"
+#include "log.h"    
 
-/* ---- Macros and constants ---- */
-#define COMMS_STACK_SIZE 3000
-#define COMMS_PRIORITY 1
 
 /* ---- Type definitions ---- */
 typedef enum {
@@ -58,21 +65,23 @@ static ObcState_t currentState;
 /* ---- Public function definitions ---- */
 
 void obc_task(void *pv_parameters) {
-
+    
     setup_obc();
 
     for (;;) {
-        process_obc(&currentState);
-        health_check();
+       process_obc(&currentState);
+       health_check();
+       printf("OBC cycle complete\r\n");
+       vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
 }
 
-/* ---- Private function definitions ---- */
+/* ---- Private function defisnitions ---- */
 
 static void setup_obc(void) {
 
-    printf("Setting up OBC...\n");
+    printf("Setting up OBC...\r\n");
     // 1. Create queues
     // create_queues();  // TODO: implement this function
 
@@ -80,22 +89,22 @@ static void setup_obc(void) {
     BaseType_t ok = create_payload_task();
     if (ok != pdPASS)
     {
-        // error
+        printf("Error creating payload task\r\n");
     }
     ok = create_eps_task();
     if (ok != pdPASS)
     {
-        // error
+        printf("Error creating eps task\r\n");
     }
     ok = create_comms_task();
     if (ok != pdPASS)
     {
-        // error
+        printf("Error creating comms task\r\n");
     }
     ok = create_obdh_task();
     if (ok != pdPASS)
     {
-        // error
+        printf("Error creating obdh task\r\n");
     }
     health_init();
 }
@@ -110,7 +119,7 @@ static void change_state_if_needed(void) {
 
 static void process_obc(ObcState_t *currentState) {
 
-    printf("Processing OBC...\n");
+    printf("Processing OBC...\r\n");
 
     suspend_and_resume_tasks_depending_on_state(currentState);
 
@@ -133,7 +142,7 @@ static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState
             break;
 
         default:
-            printf("Unknown state\n");
+            printf("Unknown state\r\n");
             break;
 
     }

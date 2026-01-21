@@ -1,0 +1,22 @@
+\doxysection{health.\+h}
+\hypertarget{health_8h_source}{}\label{health_8h_source}\index{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/include/utils/health.h@{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/include/utils/health.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#pragma\ once}}
+\DoxyCodeLine{00002\ }
+\DoxyCodeLine{00003\ \textcolor{preprocessor}{\#include\ "{}FreeRTOS.h"{}}}
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ "{}event\_groups.h"{}}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}\ \{}
+\DoxyCodeLine{00008\ \ \ \ \ HEALTH\_BIT\_PAYLOAD\ =\ (1u\ <<\ 0),}
+\DoxyCodeLine{00009\ \ \ \ \ HEALTH\_BIT\_OBDH\ \ \ \ =\ (1u\ <<\ 1),}
+\DoxyCodeLine{00010\ \ \ \ \ HEALTH\_BIT\_EPS\ \ \ \ \ =\ (1u\ <<\ 2),}
+\DoxyCodeLine{00011\ \ \ \ \ HEALTH\_BIT\_COMMS\ \ \ =\ (1u\ <<\ 3),}
+\DoxyCodeLine{00012\ \ \ \ \ HEALTH\_BIT\_ADCS\ \ \ \ =\ (1u\ <<\ 4),}
+\DoxyCodeLine{00013\ \}\ health\_bit\_t;}
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{keywordtype}{void}\ health\_kick(EventBits\_t\ bit);}
+\DoxyCodeLine{00016\ }
+
+\end{DoxyCode}

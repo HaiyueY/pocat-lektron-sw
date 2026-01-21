@@ -1,0 +1,44 @@
+\doxysection{/c/\+Users/otuam/\+Desktop/\+Nanosat/pocat-\/lektron-\/sw/src/subsystems/adcs.c File Reference}
+\hypertarget{adcs_8c}{}\label{adcs_8c}\index{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/src/subsystems/adcs.c@{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/src/subsystems/adcs.c}}
+
+
+The ADCS software processes sensor data, executes algorithms to determine the satellite\textquotesingle{}s position, and issues commands to control and stabilize its orientation.  
+
+
+{\ttfamily \#include $<$stdint.\+h$>$}\newline
+{\ttfamily \#include "{}Free\+RTOS.\+h"{}}\newline
+{\ttfamily \#include "{}task.\+h"{}}\newline
+{\ttfamily \#include "{}adcs.\+h"{}}\newline
+{\ttfamily \#include "{}health.\+h"{}}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{adcs_8c_aabcc522434e1151dc0a08f0eb5261070}\label{adcs_8c_aabcc522434e1151dc0a08f0eb5261070} 
+\#define {\bfseries ADCS\+\_\+\+DETUMBLING\+\_\+\+MODE}~(1 $<$$<$ 0)
+\item 
+\Hypertarget{adcs_8c_aeb522a0c88c4235112446c704a68ac94}\label{adcs_8c_aeb522a0c88c4235112446c704a68ac94} 
+\#define {\bfseries ADCS\+\_\+\+NADIR\+\_\+\+POINTING\+\_\+\+MODE}~(1 $<$$<$ 1)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{adcs_8c_a7bdcf114e94e62c4396d6be37ba7017d}\label{adcs_8c_a7bdcf114e94e62c4396d6be37ba7017d} 
+void {\bfseries adcs\+\_\+task} (void \texorpdfstring{$\ast$}{*}pv\+\_\+parameters)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+The ADCS software processes sensor data, executes algorithms to determine the satellite\textquotesingle{}s position, and issues commands to control and stabilize its orientation. 
+
+\begin{DoxyAuthor}{Author}
+your name (\href{mailto:you@domain.com}{\texttt{you@domain.\+com}}) 
+\end{DoxyAuthor}
+\begin{DoxyVersion}{Version}
+0.\+1 
+\end{DoxyVersion}
+\begin{DoxyDate}{Date}
+2026-\/01-\/20
+\end{DoxyDate}
+\begin{DoxyCopyright}{Copyright}
+Copyright (c) 2026 
+\end{DoxyCopyright}

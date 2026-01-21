@@ -1,0 +1,64 @@
+\doxysection{radiolib\+\_\+wrapper.\+h}
+\hypertarget{radiolib__wrapper_8h_source}{}\label{radiolib__wrapper_8h_source}\index{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/include/utils/RadioLib/radiolib\_wrapper.h@{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/include/utils/RadioLib/radiolib\_wrapper.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ INC\_WRAPPER\_H}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ INC\_WRAPPER\_H}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00005\ }
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#ifdef\ \_\_cplusplus}}
+\DoxyCodeLine{00007\ \textcolor{keyword}{extern}\ \textcolor{stringliteral}{"{}C"{}}\ \{}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00009\ }
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00012\ \ \ \ \ void\ (*TxDone)(void);\ \textcolor{comment}{//\ Transmissio\ acabada}}
+\DoxyCodeLine{00013\ \ \ \ \ void\ (*RxDone)(uint8\_t\ *payload,\ uint16\_t\ size,\ int16\_t\ rssi,\ int8\_t\ snr);\ \textcolor{comment}{//\ Recepcio\ acabada}}
+\DoxyCodeLine{00014\ \ \ \ \ void\ (*TxTimeout)(void);\ \textcolor{comment}{//\ Timeout\ de\ transmissio}}
+\DoxyCodeLine{00015\ \ \ \ \ void\ (*RxTimeout)(void);\ \textcolor{comment}{//\ Timeout\ de\ recepcio}}
+\DoxyCodeLine{00016\ \ \ \ \ void\ (*RxError)(void);\ \textcolor{comment}{//\ Error\ de\ recepcio}}
+\DoxyCodeLine{00017\ \ \ \ \ void\ (*CadDone)(\textcolor{keywordtype}{int}\ channelActivityDetected);\ \textcolor{comment}{//\ Deteccio\ de\ canal\ acabada}}
+\DoxyCodeLine{00018\ \}\ \mbox{\hyperlink{struct_radio_events__t}{RadioEvents\_t}};}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{keywordtype}{void}\ RadioLib\_Init(\mbox{\hyperlink{struct_radio_events__t}{RadioEvents\_t}}\ *events);\ \textcolor{comment}{//\ Inicialitza\ la\ radio\ i\ assigna\ els\ callbacks}}
+\DoxyCodeLine{00022\ }
+\DoxyCodeLine{00023\ \textcolor{keywordtype}{void}\ RadioLib\_SetChannel(uint32\_t\ freq);\ \textcolor{comment}{//\ Configura\ la\ frequencia}}
+\DoxyCodeLine{00024\ }
+\DoxyCodeLine{00025\ \textcolor{keywordtype}{void}\ RadioLib\_SetTxConfig(\ \ \ \ \ \textcolor{comment}{//\ El\ CR\ de\ radioLib\ es\ diferente\ al\ de\ SX1262Config,\ hay\ que\ sumarle\ +\ 4,\ Configura\ els\ parametres\ de\ TX}}
+\DoxyCodeLine{00026\ \ \ \ \ uint8\_t\ sf,\ \textcolor{comment}{//\ Spreading\ Factor,\ controla\ la\ sensibilitat\ i\ el\ abast}}
+\DoxyCodeLine{00027\ \ \ \ \ uint8\_t\ cr,\ \textcolor{comment}{//\ Coding\ Rate,\ controla\ la\ correccio\ d'errors}}
+\DoxyCodeLine{00028\ \ \ \ \ int8\_t\ power,\ \textcolor{comment}{//\ Potencia\ de\ transmissio}}
+\DoxyCodeLine{00029\ \ \ \ \ uint8\_t\ bw\_code,\ \textcolor{comment}{//\ Bandwidth,\ controla\ l'amplada\ de\ banda}}
+\DoxyCodeLine{00030\ \ \ \ \ \textcolor{keywordtype}{int}\ iqInverted,\ \textcolor{comment}{//\ Inversio\ de\ la\ senyal\ IQ\ (evitar\ colisions)}}
+\DoxyCodeLine{00031\ \ \ \ \ \textcolor{keywordtype}{int}\ crcOn,\ \textcolor{comment}{//\ Activar\ CRC\ (checksum\ per\ errors)}}
+\DoxyCodeLine{00032\ \ \ \ \ uint16\_t\ preambleLen);\ \textcolor{comment}{//Sequencia\ la\ sincronitzacio}}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00034\ \textcolor{keywordtype}{void}\ RadioLib\_SetRxConfig(\ \textcolor{comment}{//\ Configura\ els\ parametres\ de\ RX}}
+\DoxyCodeLine{00035\ \ \ \ \ uint8\_t\ sf,\ \textcolor{comment}{//\ Spreading\ Factor,\ controla\ la\ sensibilitat\ i\ el\ abast}}
+\DoxyCodeLine{00036\ \ \ \ \ uint8\_t\ cr,\ \textcolor{comment}{//\ Coding\ Rate,\ controla\ la\ correccio\ d'errors}}
+\DoxyCodeLine{00037\ \ \ \ \ uint8\_t\ bw\_code,\ \textcolor{comment}{//\ Bandwidth,\ controla\ l'amplada\ de\ banda}}
+\DoxyCodeLine{00038\ \ \ \ \ \textcolor{keywordtype}{int}\ iqInverted,\ \textcolor{comment}{//\ Inversio\ de\ la\ senyal\ IQ\ (evitar\ colisions)}}
+\DoxyCodeLine{00039\ \ \ \ \ \textcolor{keywordtype}{int}\ crcOn,\ \textcolor{comment}{//\ Activar\ CRC\ (checksum\ per\ errors)}}
+\DoxyCodeLine{00040\ \ \ \ \ uint16\_t\ preambleLen);\ \textcolor{comment}{//Sequencia\ la\ sincronitzacio}}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ \textcolor{keywordtype}{void}\ RadioLib\_Send(uint8\_t\ *buf,\ uint16\_t\ len);\ \textcolor{comment}{//\ Envia\ les\ dades}}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00044\ int16\_t\ RadioLib\_Rx(uint32\_t\ timeoutMs);\ \textcolor{comment}{//\ Entra\ en\ mode\ recepcio\ durant\ timeoutMs\ milisegons}}
+\DoxyCodeLine{00045\ }
+\DoxyCodeLine{00046\ int16\_t\ RadioLib\_Sleep(\textcolor{keywordtype}{void});\ \textcolor{comment}{//\ Entra\ en\ mode\ sleep}}
+\DoxyCodeLine{00047\ }
+\DoxyCodeLine{00048\ int16\_t\ RadioLib\_Standby(\textcolor{keywordtype}{void});\ \textcolor{comment}{//\ Entra\ en\ mode\ standby}}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00050\ int16\_t\ RadioLib\_StartCad(\textcolor{keywordtype}{void});\ \textcolor{comment}{//\ Comença\ la\ detecció\ de\ canal.\ Ens\ cal\ realment\ aquesta\ funcio??}}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00052\ \textcolor{keywordtype}{void}\ RadioLib\_IrqProcess(\textcolor{keywordtype}{void});\ \textcolor{comment}{//\ Funcio\ que\ no\ fa\ res\ pq\ radiolib\ ja\ fa\ la\ seva\ gestio,\ pero\ aixi\ corregim\ menys\ codi}}
+\DoxyCodeLine{00053\ }
+\DoxyCodeLine{00054\ \textcolor{preprocessor}{\#ifdef\ \_\_cplusplus}}
+\DoxyCodeLine{00055\ \}}
+\DoxyCodeLine{00056\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00058\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

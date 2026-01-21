@@ -20,6 +20,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32l4xx_it.h"
+#include "FreeRTOS.h"
+#include "task.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -138,21 +140,6 @@ void UsageFault_Handler(void)
   }
 }
 
-
-// already defined in FreeRTOS
-/**
-  * @brief This function handles System service call via SWI instruction.
-  */
-// void SVC_Handler(void)
-// {
-//   /* USER CODE BEGIN SVCall_IRQn 0 */
-
-//   /* USER CODE END SVCall_IRQn 0 */
-//   /* USER CODE BEGIN SVCall_IRQn 1 */
-
-//   /* USER CODE END SVCall_IRQn 1 */
-// }
-
 /**
   * @brief This function handles Debug monitor.
   */
@@ -166,35 +153,27 @@ void DebugMon_Handler(void)
   /* USER CODE END DebugMonitor_IRQn 1 */
 }
 
-// already defined in FreeRTOS
-// /**
-//   * @brief This function handles Pendable request for system service.
-//   */
-// void PendSV_Handler(void)
-// {
-//   /* USER CODE BEGIN PendSV_IRQn 0 */
+/**
+  * @brief This function handles System tick timer.
+  */
+void SysTick_Handler(void)
+{
+  /* USER CODE BEGIN SysTick_IRQn 0 */
 
-//   /* USER CODE END PendSV_IRQn 0 */
-//   /* USER CODE BEGIN PendSV_IRQn 1 */
+  /* USER CODE END SysTick_IRQn 0 */
+  HAL_IncTick();
+#if (INCLUDE_xTaskGetSchedulerState == 1 )
+  if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+  {
+#endif /* INCLUDE_xTaskGetSchedulerState */
+  xPortSysTickHandler();
+#if (INCLUDE_xTaskGetSchedulerState == 1 )
+  }
+#endif /* INCLUDE_xTaskGetSchedulerState */
+  /* USER CODE BEGIN SysTick_IRQn 1 */
 
-//   /* USER CODE END PendSV_IRQn 1 */
-// }
-
-
-// already defined in FreeRTOS
-// /**
-//   * @brief This function handles System tick timer.
-//   */
-// void SysTick_Handler(void)
-// {
-//   /* USER CODE BEGIN SysTick_IRQn 0 */
-
-//   /* USER CODE END SysTick_IRQn 0 */
-//   HAL_IncTick();
-//   /* USER CODE BEGIN SysTick_IRQn 1 */
-
-//   /* USER CODE END SysTick_IRQn 1 */
-// }
+  /* USER CODE END SysTick_IRQn 1 */
+}
 
 /******************************************************************************/
 /* STM32L4xx Peripheral Interrupt Handlers                                    */
@@ -204,64 +183,5 @@ void DebugMon_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
-
-
-void EXTI0_IRQHandler(void)
-{
-  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0)) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
-  }
-}
-
-void EXTI1_IRQHandler(void)
-{
-  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_1)) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
-  }
-}
-
-void EXTI2_IRQHandler(void)
-{
-  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_2)) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
-  }
-}
-
-void EXTI3_IRQHandler(void)
-{
-  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_3)) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
-  }
-}
-
-void EXTI4_IRQHandler(void)
-{
-  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_4)) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
-  }
-}
-
-
-void EXTI9_5_IRQHandler(void)
-{
-  for (uint32_t line = 5; line <= 9; ++line) {
-    uint16_t mask = (uint16_t)(1u << line);
-    if (__HAL_GPIO_EXTI_GET_IT(mask)) {
-      HAL_GPIO_EXTI_IRQHandler(mask);
-    }
-  }
-}
-
-void EXTI15_10_IRQHandler(void)
-{
-  for (uint32_t line = 10; line <= 15; ++line) {
-    uint16_t mask = (uint16_t)(1u << line);
-
-    if (__HAL_GPIO_EXTI_GET_IT(mask)) {
-      HAL_GPIO_EXTI_IRQHandler(mask);
-    }
-  }
-}
-
 
 /* USER CODE END 1 */

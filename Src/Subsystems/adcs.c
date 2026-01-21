@@ -1,10 +1,21 @@
-// The ADCS software processes sensor data, executes algorithms to determine the satellite's 
-// position, and issues commands to control and stabilize its orientation. This ensures that 
-// the satellite can reliably carry out mission objectives such as precise data collection, 
-// alignment with targets, and consistent communication.
+/**
+ * @file adcs.c
+ * @author your name (you@domain.com)
+ * @brief The ADCS software processes sensor data, executes algorithms to determine the satellite's 
+    position, and issues commands to control and stabilize its orientation.
+ * @version 0.1
+ * @date 2026-01-20
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
+
+
 
 /* ---- Includes ---- */
 #include <stdint.h>
+#include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include "adcs.h"
@@ -31,7 +42,13 @@ static void point_to_nadir(void);
 /* ---- Public function definitions ---- */
 
 void adcs_task(void *pv_parameters) {
-
+    setup_adcs();
+    for (;;) {
+        process_adcs();
+        health_kick(HEALTH_BIT_ADCS);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        printf("ADCS loop\r\n");
+    }
 }
 
 
@@ -39,6 +56,7 @@ void adcs_task(void *pv_parameters) {
 
 static void setup_adcs(void) {
     // Apply the default configuration
+    printf("Setting up ADCS...\r\n");
 }
 
 static void process_adcs(void) {

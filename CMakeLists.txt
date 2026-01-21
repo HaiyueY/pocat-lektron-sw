@@ -28,61 +28,56 @@ enable_language(C ASM CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
-# set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD 20) # changed from 17 to 20 (radiolib is in c++20)
+set(CMAKE_CXX_STANDARD 20) 
 
 # Include folders
 
-set(CUBEMX_INCLUDE_DIRECTORIES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/${MCU_FAMILY}_HAL_Driver/Inc
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/${MCU_FAMILY}_HAL_Driver/Inc/Legacy
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/CMSIS/Device/ST/${MCU_FAMILY}/Include
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/CMSIS/Include
+set(CUBEMX_INCLUDE_DIRECTORIES 
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/${MCU_FAMILY}_HAL_Driver/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/${MCU_FAMILY}_HAL_Driver/Inc/Legacy
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/CMSIS/Device/ST/${MCU_FAMILY}/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/CMSIS/Include
 )
 
 set(PROJECT_INCLUDE_DIRECTORIES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Core
-    # ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Common
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Hal
-    # ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Interrupts
-    # ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Subsystem
-    # ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Tasks
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Utils
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Utils/Radiolib
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Subsystems
-    #${CMAKE_CURRENT_SOURCE_DIR}/Inc/Semtech/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/utils/Radiolib
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems
 )
 
 set(FREERTOS_INCLUDE_DIRECTORIES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/FreeRTOS/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/FreeRTOS/CMSIS_RTOS
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/FreeRTOS/portable/GCC/ARM_CM4F
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/CMSIS_RTOS_V2
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/GCC/ARM_CM4F
 )
 
 set(RADIOLIB_INCLUDE_DIRECTORIES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/RadioLib/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/RadioLib/src
 )
 	
 # Gather sources #MIRAR
 file(GLOB_RECURSE STM32CUBEMX_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/*.c // 
 )
 
 file(GLOB_RECURSE PROJECT_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Semtech/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Utils/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Utils/Radiolib/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Subsystems/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/Radiolib/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/subsystems/*.c
 )
 
 file(GLOB_RECURSE FREERTOS_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Drivers/FreeRTOS/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/CMSIS_RTOS_V2/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/GCC/ARM_CM4F/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/MemMang/*.c
 )
 
 # --- RadioLib sources ---
 file(GLOB_RECURSE RADIOLIB_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/RadioLib/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/RadioLib/src/*.cpp
 )
 
 # Executable files

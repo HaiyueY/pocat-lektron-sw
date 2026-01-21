@@ -1,3 +1,14 @@
+/**
+ * @file stm32_radiolib_hal.cpp
+ * @author your name (you@domain.com)
+ * @brief 
+ * @version 0.1
+ * @date 2026-01-20
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
 #include "stm32_radiolib_hal.h"
 
 // Realizamos un callback forwarding de la funcion de stm32 HAL a nuestra implementacion en stm32RadioLibHal

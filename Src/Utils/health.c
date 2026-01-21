@@ -1,3 +1,14 @@
+/**
+ * @file health.c
+ * @author your name (you@domain.com)
+ * @brief 
+ * @version 0.1
+ * @date 2026-01-20
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
 #include "health.h"
 
 static EventGroupHandle_t health_eg = NULL;

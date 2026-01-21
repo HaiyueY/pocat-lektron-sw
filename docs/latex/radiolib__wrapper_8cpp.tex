@@ -1,0 +1,53 @@
+\doxysection{/c/\+Users/otuam/\+Desktop/\+Nanosat/pocat-\/lektron-\/sw/src/utils/\+Radio\+Lib/radiolib\+\_\+wrapper.cpp File Reference}
+\hypertarget{radiolib__wrapper_8cpp}{}\label{radiolib__wrapper_8cpp}\index{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/src/utils/RadioLib/radiolib\_wrapper.cpp@{/c/Users/otuam/Desktop/Nanosat/pocat-\/lektron-\/sw/src/utils/RadioLib/radiolib\_wrapper.cpp}}
+{\ttfamily \#include "{}radiolib\+\_\+wrapper.\+h"{}}\newline
+{\ttfamily \#include $<$Radio\+Lib.\+h$>$}\newline
+{\ttfamily \#include "{}stm32\+\_\+radiolib\+\_\+hal.\+h"{}}\newline
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a17c5a4d3e4d8f9eee4bd2cc940434678}\label{radiolib__wrapper_8cpp_a17c5a4d3e4d8f9eee4bd2cc940434678} 
+void {\bfseries Radio\+Lib\+\_\+\+Init} (\mbox{\hyperlink{struct_radio_events__t}{Radio\+Events\+\_\+t}} \texorpdfstring{$\ast$}{*}events)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a598214963e266504ea3baa033c400dc2}\label{radiolib__wrapper_8cpp_a598214963e266504ea3baa033c400dc2} 
+void {\bfseries Radio\+Lib\+\_\+\+Set\+Channel} (uint32\+\_\+t freq\+\_\+hz)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a4e118837a958f1a039062b4da5840b3a}\label{radiolib__wrapper_8cpp_a4e118837a958f1a039062b4da5840b3a} 
+void {\bfseries Radio\+Lib\+\_\+\+Set\+Tx\+Config} (uint8\+\_\+t sf, uint8\+\_\+t cr, int8\+\_\+t power, uint8\+\_\+t bw, int iq\+Inverted, int crc\+On, uint16\+\_\+t preamble\+Len)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a88d020aa22333eeff6059a2b08c141ff}\label{radiolib__wrapper_8cpp_a88d020aa22333eeff6059a2b08c141ff} 
+void {\bfseries Radio\+Lib\+\_\+\+Set\+Rx\+Config} (uint8\+\_\+t sf, uint8\+\_\+t cr, uint8\+\_\+t bw, int iq\+Inverted, int crc\+On, uint16\+\_\+t preamble\+Len)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a1af0ad84503aae70030b089fae1a446d}\label{radiolib__wrapper_8cpp_a1af0ad84503aae70030b089fae1a446d} 
+int16\+\_\+t {\bfseries Radio\+Lib\+\_\+\+Rx} (uint32\+\_\+t timeout\+Ms)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a51509850b9ac13fb8df15c4d4b9b140c}\label{radiolib__wrapper_8cpp_a51509850b9ac13fb8df15c4d4b9b140c} 
+void {\bfseries Radio\+Lib\+\_\+\+Send} (uint8\+\_\+t \texorpdfstring{$\ast$}{*}buf, uint16\+\_\+t len)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_ada87247092a4de8f2022460ff3d64554}\label{radiolib__wrapper_8cpp_ada87247092a4de8f2022460ff3d64554} 
+int16\+\_\+t {\bfseries Radio\+Lib\+\_\+\+Sleep} (void)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a78b5b7885cb58fb5de6b6a72020ceb07}\label{radiolib__wrapper_8cpp_a78b5b7885cb58fb5de6b6a72020ceb07} 
+int16\+\_\+t {\bfseries Radio\+Lib\+\_\+\+Standby} (void)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a2e5beecd1afcdf9f756bc5e9efd4e580}\label{radiolib__wrapper_8cpp_a2e5beecd1afcdf9f756bc5e9efd4e580} 
+int16\+\_\+t {\bfseries Radio\+Lib\+\_\+\+Start\+Cad} (void)
+\item 
+\Hypertarget{radiolib__wrapper_8cpp_a780ce07fa01e1aa717198911ffd36f0a}\label{radiolib__wrapper_8cpp_a780ce07fa01e1aa717198911ffd36f0a} 
+void {\bfseries Radio\+Lib\+\_\+\+Irq\+Process} (void)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyAuthor}{Author}
+your name (\href{mailto:you@domain.com}{\texttt{you@domain.\+com}}) 
+\end{DoxyAuthor}
+\begin{DoxyVersion}{Version}
+0.\+1 
+\end{DoxyVersion}
+\begin{DoxyDate}{Date}
+2026-\/01-\/20
+\end{DoxyDate}
+\begin{DoxyCopyright}{Copyright}
+Copyright (c) 2026 
+\end{DoxyCopyright}

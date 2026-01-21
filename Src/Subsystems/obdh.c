@@ -1,6 +1,16 @@
-// oversees the management of internal data within the spacecraft. Its primary focus includes 
-// housekeeping data, scientific data, and configurations, as well as managing access to flash 
-// memory. (primary focus now is saving and retrieving data from flash)
+/**
+ * @file obdh.c
+ * @author your name (you@domain.com)
+ * @brief oversees the management of internal data within the spacecraft. Its primary focus includes 
+    housekeeping data, scientific data, and configurations, as well as managing access to flash 
+    memory. (primary focus now is saving and retrieving data from flash)
+ * @version 0.1
+ * @date 2026-01-20
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
 
 /* ---- Includes ---- */
 #include "obdh.h"
@@ -31,6 +41,8 @@ void obdh_task(void *pv_parameters) {
     for (;;) {
         process_obdh();
         health_kick(HEALTH_BIT_OBDH);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        printf("OBDH loop\r\n");
     }
 
 }
@@ -40,14 +52,14 @@ void obdh_task(void *pv_parameters) {
 
 void setup_obdh(void) {
 
-    printf("Setting up OBDH...\n");
+    printf("Setting up OBDH...\r\n");
     // Apply the default configuration
 
 }
 
 void process_obdh(void) {
 
-    printf("Processing OBDH...\n");
+    // printf("Processing OBDH...\n");
 
     // Gestión de la flash:
     // Leemos datos de la cola de la tarea (donde habran peticiones de read o write de otras tareas

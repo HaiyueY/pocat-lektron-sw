@@ -1,3 +1,14 @@
+/**
+ * @file payload.c
+ * @author your name (you@domain.com)
+ * @brief 
+ * @version 0.1
+ * @date 2026-01-20
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
 
 /* ---- Includes ---- */
 #include "FreeRTOS.h"
@@ -22,14 +33,16 @@ static void capture_photo(void);
 /* ---- Public function definitions ---- */
 
 void payload_task(void *pv_parameters) {
-    
+
     setup_payload();
 
     for (;;) {
         process_payload();
         health_kick(HEALTH_BIT_PAYLOAD);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        printf("PAYLOAD loop\r\n");
     }
-
+    
 }
 
 /* ---- Private function definitions ---- */
@@ -38,6 +51,7 @@ void setup_payload(void) {
 
     // Apply default configuration
     // ...
+    printf("Setting up PAYLOAD...\r\n");
     
 }
 

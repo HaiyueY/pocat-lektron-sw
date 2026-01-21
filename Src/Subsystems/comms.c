@@ -6,7 +6,9 @@
 #include "comms.h"
 #include "radiolib_wrapper.h"
 #include "health.h"
-
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 
 /* ---- Macros and constants ---- */
@@ -17,7 +19,6 @@
                                                       //  1: 250 kHz,
                                                       //  2: 500 kHz,
                                                       //  3: Reserved]
-#define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
 #define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
 #define LORA_SYMBOL_TIMEOUT                 100       // Symbols
 #define LORA_FIX_LENGTH_PAYLOAD_ON          0
@@ -33,6 +34,8 @@
 #define CAD_DET_MIN             1
 
 #define MODEM_LORA              1 // To-do: revise
+
+#define COMMS_PKT_SIZE 48
 
 
 /* ---- Type definitions ---- */
@@ -175,7 +178,8 @@ void Deinterleave(uint8_t *inputarr, int size);
 
 
 // Function prototypes
-void setupComms(void);
+void setup_comms(void);
+void process_comms(void);
 
 
 // DEFINITIONS
@@ -183,40 +187,50 @@ void setupComms(void);
 void comms_task(void *pv_parameters)
 {
 
-    setupComms();
+    setup_comms();
 
     for(;;) 
     {
-        switch(CommsState)
-        {   
-
-            case STARTUP:
-                Startup(); break; // Done // Correspondiente a Startup en cmake_comms
-
-            case SLEEP:
-                Sleep(); break; // Done // Correspondiente a una mitad de Sleep en cmake_comms.
-                // Falta COMMS_DEBUG_MODE
-
-            case RECEIVE:
-                Receive(); break; // Done // Correspondiente a la otra mitad de Sleep en cmake_comms, 
-                // añadiendole la recepción de ACKs que eso forma parte de RX en cmake_comms
-
-            case TRANSMIT:
-                Transmit(); break; // To do
-            
-            case STANDBY:
-                StandBy(); break; // To do
-
-        }
-
-        NextState();
+        process_comms();
+        health_kick(HEALTH_BIT_COMMS);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        printf("COMMS loop\r\n");
 
     }
 }
 
-void setupComms(void)
+void setup_comms(void)
 {
     // Apply the default configuration
+    printf("Setting up COMMS...\r\n");
+}
+
+void process_comms(void)
+{
+    return;
+    switch(CommsState)
+    {   
+
+        case STARTUP:
+            Startup(); break; // Done // Correspondiente a Startup en cmake_comms
+
+        case SLEEP:
+            Sleep(); break; // Done // Correspondiente a una mitad de Sleep en cmake_comms.
+            // Falta COMMS_DEBUG_MODE
+
+        case RECEIVE:
+            Receive(); break; // Done // Correspondiente a la otra mitad de Sleep en cmake_comms, 
+            // añadiendole la recepción de ACKs que eso forma parte de RX en cmake_comms
+
+        case TRANSMIT:
+            Transmit(); break; // To do
+        
+        case STANDBY:
+            StandBy(); break; // To do
+
+    }
+
+    NextState();
 }
 
 void NextState(void) // CAMBIOS DE ESTADO SE HACEN AQUÍ
@@ -235,14 +249,19 @@ void NextState(void) // CAMBIOS DE ESTADO SE HACEN AQUÍ
 
         case STANDBY:
             CommsState = SLEEP; break;
+        
+        case RECEIVE:
+            CommsState = SLEEP; break;
 
         default:
-            ProcessRadioCallbacks(); break; // default si el cambio de estado depende del resultado de un callback
+            break;
+            //ProcessRadioCallbacks(); break; // default si el cambio de estado depende del resultado de un callback
             // en este caso el estado se cambia al final de cada callback
     }
 }
 
-// MIRAR ??
+// MIRAR ?? 
+/*
 void ProcessRadioCallbacks(void) 
 {
     while (!CommsFlags.callbackFinished) {
@@ -251,6 +270,8 @@ void ProcessRadioCallbacks(void)
     }
     CommsFlags.callbackFinished = 0;
 }
+    */
+
 
 // Unica funcio que esta en RADIOLIB
 // BoardInitMcu(); tret
@@ -297,36 +318,54 @@ void Sleep(void)
 // Receive state 
 //    COMMS_DEBUG_MODE -> constante <- HAVE TO IMPLEMENT
 //    HAVE TO IMPLEMENT ACK RECEPTION
-void Receive(void) 
+//    HAVE IMPLEMENTED CAD MODE
+void Receive(void)
 {
     if (CommsFlags.cadMode) {
+
         if (CommsFlags.cadRx) {
-            RadioLib_Rx(CommsSettings.rxTime); // ** this case 
+            // CAD detecta si hi ha activitat
             CommsFlags.cadRx = 0;
+            RadioLib_Rx(CommsSettings.rxTime);
+        } else {
+            // Fem CAD real (scanChannel)
+            RadioLib_StartCad();
         }
-        else {
-            // this is not available in wrapper
-            // radio.StartCad();
-            vTaskDelay(pdMS_TO_TICKS(CommsSettings.rxTime));
-        }
-    }
-    else {
+
+    } else {
+        // Sense CAD: recepció directa
         RadioLib_Rx(CommsSettings.rxTime);
-		vTaskDelay(pdMS_TO_TICKS(CommsSettings.rxTime)); // ** and this case look the same 
     }
 }
 
-void Transmit(void) 
+
+void Transmit(void)
 {
+    // Tractar el ACK
     if (CommsFlags.txAck)
     {
-            //
+        memset(CommsPackets.TxData, 0, sizeof(CommsPackets.TxData)); // netejar el buffer
+
+        TxPrepare(ACK_M);
+
+        Interleave(CommsPackets.TxData, COMMS_PKT_SIZE);
+
+        RadioLib_Send(CommsPackets.TxData, COMMS_PKT_SIZE);
+
+        return;
     }
+
+    // Payload data ACABAR
     if (CommsFlags.txPayload)
     {
-            //
+        // Fer tot lo de preparar dades
+        return;
     }
+
+    // Si arribes aquí, no hi ha res a transmetre
+    CommsState = SLEEP;
 }
+
 
 // Queda UPLOAD_COMMS_CONFIG y COMMS_UPLOAD_PARAMS y OBC_SOFT_REBOOT
 void StandBy(void) 
@@ -367,10 +406,16 @@ void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
     }
 }
 
-void OnTxDone( void ) 
+void OnTxDone(void)
 {
-    // to do
+    // neteja de flags i variables
+    CommsFlags.txAck = 0;
+    CommsFlags.txPayload = 0;
+
+    RadioLib_Standby();
+    CommsState = SLEEP;
 }
+
 
 // COMMSRxErrors
 void OnRxError( void )
@@ -387,8 +432,12 @@ void OnRxTimeout( void)
     CommsState = SLEEP;
 }
 
-void OnTxTimeout( void )
+void OnTxTimeout(void) 
 {
+    // neteja de flags i variables
+    CommsFlags.txAck = 0;
+    CommsFlags.txPayload = 0;
+
     RadioLib_Standby();
     CommsState = STANDBY;
 }
@@ -410,7 +459,7 @@ void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F)
     /* Reads the SF, CR and time between packets variables from memory */
     /* Configuration of the LoRa frequency and TX and RX parameters */
     RadioLib_SetChannel(RF_F);
-    // estam ya lo hacemos en setupComms
+    // estam ya lo hacemos en setup_comms
     //RadioLib_SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH, SF, CR,
     //                                LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
     //                                1, 0, 0, LORA_IQ_INVERSION_ON, 3000 );
@@ -454,7 +503,7 @@ CommsState_t ProcessTelecommand() // function processes telecommand from RxData
 
 //ack_m or OP?? simply name convention
 void TxPrepare(uint8_t messageType) {
-    uint32_t unixTime32 = (uint32_t) RtcGetTimerValue();
+    uint32_t unixTime32 = 0; //(uint32_t) HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN); // to-do: mutex
     switch(messageType)
     {
         case ACK_M:
