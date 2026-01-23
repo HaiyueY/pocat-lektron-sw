@@ -42,7 +42,7 @@ set(CUBEMX_INCLUDE_DIRECTORIES
 set(PROJECT_INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/core
     ${CMAKE_CURRENT_SOURCE_DIR}/include/utils
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/utils/Radiolib
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/utils/RadioLib
     ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems
 )
 
