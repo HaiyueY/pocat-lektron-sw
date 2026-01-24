@@ -43,7 +43,12 @@ set(PROJECT_INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/core
     ${CMAKE_CURRENT_SOURCE_DIR}/include/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/include/utils/RadioLib
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/adcs
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/comms
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/eps
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/obc
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/obdh
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/payloads
 )
 
 set(FREERTOS_INCLUDE_DIRECTORIES
@@ -65,7 +70,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/Radiolib/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/subsystems/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/subsystems/*/*.c
 )
 
 file(GLOB_RECURSE FREERTOS_SOURCES
