@@ -149,7 +149,7 @@ EventBits_t health_check(void)
     // Only refresh IWDG after an actual health check passed (not during wait)
     if (period_elapsed && faults == 0 && iwdg_handle != NULL)
     {
-        printf("Health check OK, refreshing IWDG\r\n");
+        //printf("Health check OK, refreshing IWDG\r\n");
         HAL_IWDG_Refresh(iwdg_handle);
     }
 
