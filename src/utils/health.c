@@ -1,24 +1,36 @@
 /**
  * @file health.c
- * @author your name (you@domain.com)
- * @brief 
+ * @brief Software watchdog implementation for subsystem health monitoring.
+ * @author Jaume Cortés Grimalt
  * @version 0.1
- * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
- * 
+ * @date 2026-01-26
+ *
+ * This module uses a FreeRTOS event group as a software watchdog mechanism.
+ * Subsystem tasks set their corresponding bit via health_kick(). The OBC
+ * periodically calls system_health() which, after the configured period,
+ * checks which expected bits are missing and clears all bits for the next period.
  */
 
 #include "health.h"
 
+/** @brief Event group handle for health bit tracking. */
 static EventGroupHandle_t health_eg = NULL;
 
-static EventBits_t  expected_bits = 0;
+/** @brief Bitmask of subsystems expected to kick each period. */
+static EventBits_t expected_bits = 0;
 
+/** @brief Health check period in ticks. */
 static TickType_t period_ticks = 0;
 
+/** @brief Tick count when current period expires. */
 static TickType_t next_deadline = 0;
 
+/**
+ * @brief Check if a deadline has been reached (handles tick overflow).
+ * @param now Current tick count.
+ * @param target Target tick count.
+ * @return pdTRUE if now >= target (with overflow handling).
+ */
 static inline BaseType_t time_reached(TickType_t now, TickType_t target)
 {
     return ((int32_t)(now - target) >= 0);
@@ -27,6 +39,13 @@ static inline BaseType_t time_reached(TickType_t now, TickType_t target)
 static inline void lock(void)   { taskENTER_CRITICAL(); }
 static inline void unlock(void) { taskEXIT_CRITICAL();  }
 
+/**
+ * @brief Start a new health check period.
+ *
+ * Clears all expected bits in the event group and sets the next deadline.
+ *
+ * @param now Current tick count.
+ */
 static void start_new_period(TickType_t now)
 {
     lock();
@@ -39,11 +58,8 @@ static void start_new_period(TickType_t now)
         xEventGroupClearBits(health_eg, expected);
     }
 
-    next_deadline = now + period; // siguiente periodo
+    next_deadline = now + period;
 }
-
-
-// public functions:
 
 void health_init(void)
 {
@@ -63,7 +79,6 @@ void health_kick(EventBits_t bit)
 
 void health_config(TickType_t period)
 {
-    // revisar estos checks, quanto ponemos como minimo ... 1 tiene poco sentido...
     if (period == 0) period = 1;
 
     lock();
