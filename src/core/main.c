@@ -63,13 +63,13 @@ int main(void)
   log_init(); 
   printf("\n\n===========================\r\n");
   printf("   Pocat Flight Software\r\n");
-  printf("===========================\r\n");
+  printf("===========================\r\n\n");
   
   BaseType_t result = xTaskCreate(obc_task, "OBC", OBC_STACK_SIZE, NULL, OBC_PRIORITY, &obc_task_handle);
     if (result != pdPASS) {
         printf("Failed to create OBC task!\r\n");
     }
-    
+
   vTaskStartScheduler();
 
 
