@@ -61,16 +61,15 @@ int main(void)
   MX_IWDG_Init();
   MX_USART2_UART_Init();
   log_init(); 
-  printf("pocat flight softwaree\r\n");
+  printf("\n\n===========================\r\n");
+  printf("   Pocat Flight Software\r\n");
+  printf("===========================\r\n");
   
   BaseType_t result = xTaskCreate(obc_task, "OBC", OBC_STACK_SIZE, NULL, OBC_PRIORITY, &obc_task_handle);
     if (result != pdPASS) {
         printf("Failed to create OBC task!\r\n");
-    } else {
-        printf("OBC task created successfully\r\n");
     }
-
-
+    
   vTaskStartScheduler();
 
 
