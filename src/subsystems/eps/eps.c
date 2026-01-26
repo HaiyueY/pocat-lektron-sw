@@ -31,7 +31,7 @@ void eps_task(void *pv_parameters)
         process_eps();
         health_kick(HEALTH_BIT_EPS);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        printf("EPS loop\r\n");
+        //printf("EPS loop\r\n");
     }
 
 }

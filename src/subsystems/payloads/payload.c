@@ -40,7 +40,7 @@ void payload_task(void *pv_parameters) {
         process_payload();
         health_kick(HEALTH_BIT_PAYLOAD);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        printf("PAYLOAD loop\r\n");
+        //printf("PAYLOAD loop\r\n");
     }
     
 }
@@ -68,11 +68,11 @@ void process_payload(void) {
 
 uint32_t wait_for_notification(void) {
 
-    uint32_t notificationValue;
-    xTaskNotifyWait( 0,          // don’t clear on entry
+    uint32_t notificationValue = 0;
+    xTaskNotifyWait( 0,          // don't clear on entry
                     0xFFFFFFFF,  // clear all bits on exit
                     &notificationValue,
-                    portMAX_DELAY );
+                    pdMS_TO_TICKS(500) );  // timeout to allow periodic health kicks
     return notificationValue;
 
 }

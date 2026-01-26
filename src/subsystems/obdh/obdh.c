@@ -42,7 +42,7 @@ void obdh_task(void *pv_parameters) {
         process_obdh();
         health_kick(HEALTH_BIT_OBDH);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        printf("OBDH loop\r\n");
+        //printf("OBDH loop\r\n");
     }
 
 }

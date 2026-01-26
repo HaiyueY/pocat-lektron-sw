@@ -194,7 +194,7 @@ void comms_task(void *pv_parameters)
         process_comms();
         health_kick(HEALTH_BIT_COMMS);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        printf("COMMS loop\r\n");
+        //printf("COMMS loop\r\n");
 
     }
 }

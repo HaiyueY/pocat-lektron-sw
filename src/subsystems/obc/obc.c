@@ -21,7 +21,7 @@
 #include "comms.h"
 #include "obdh.h"
 #include "payload.h"
-#include "health_mgr.h"
+#include "health.h"
 #include "log.h"    
 
 
@@ -71,7 +71,7 @@ void obc_task(void *pv_parameters) {
     for (;;) {
        process_obc(&currentState);
        health_check();
-       printf("OBC cycle complete\r\n");
+       //printf("OBC cycle complete\r\n");
        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
@@ -107,6 +107,9 @@ static void setup_obc(void) {
         printf("Error creating obdh task\r\n");
     }
     health_init();
+    health_set_expected(HEALTH_BIT_PAYLOAD | HEALTH_BIT_OBDH |
+                        HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
+    health_config(pdMS_TO_TICKS(5000));
 }
 
 static void check_notifications(void) {
@@ -119,7 +122,7 @@ static void change_state_if_needed(void) {
 
 static void process_obc(ObcState_t *currentState) {
 
-    printf("Processing OBC...\r\n");
+    //printf("Processing OBC...\r\n");
 
     suspend_and_resume_tasks_depending_on_state(currentState);
 
