@@ -46,7 +46,7 @@ static void check_notifications(void);
 static void change_state_if_needed(void);
 static uint32_t waitForNotification(void);
 static void handlePayloadCapture(void);
-static void health_check(void);
+static void handle_health_faults(EventBits_t faults);
 static BaseType_t create_payload_task(void);
 static BaseType_t create_eps_task(void);
 static BaseType_t create_comms_task(void);
@@ -56,8 +56,6 @@ void reset_payload_task(void);
 void reset_eps_task(void);
 void reset_comms_task(void);
 void reset_obdh_task(void);
-
-void pet_watchdog(void);
 
 // a considerar/eliminar:
 static ObcState_t currentState;
@@ -70,8 +68,11 @@ void obc_task(void *pv_parameters) {
 
     for (;;) {
        process_obc(&currentState);
-       health_check();
-       //printf("OBC cycle complete\r\n");
+       EventBits_t faults = health_check();
+       if (faults != 0)
+       {
+           handle_health_faults(faults);
+       }
        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
@@ -107,6 +108,7 @@ static void setup_obc(void) {
         printf("Error creating obdh task\r\n");
     }
     health_init();
+    health_register_iwdg(&hiwdg);
     health_set_expected(HEALTH_BIT_PAYLOAD | HEALTH_BIT_OBDH |
                         HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
     health_config(pdMS_TO_TICKS(5000));
@@ -187,34 +189,27 @@ ObcState_t Nominal(void) {
 	}
 }
 
-// For now what we will do is:
-// if system is not healthy, we restart the tasks that are faulty.
-// if the system keeps being unhealthy hw watchdog will end up restarting the whole system
-void health_check(void) {
-    EventBits_t faults = system_health();
-
-    if (faults != 0) 
-    {
-        if (faults & HEALTH_BIT_EPS) {
-            reset_eps_task();
-            printf("EPS task reset due to health check\r\n");
-        }
-        if (faults & HEALTH_BIT_COMMS) {
-            reset_comms_task();
-            printf("COMMS task reset due to health check\r\n");
-        }
-        if (faults & HEALTH_BIT_PAYLOAD) {
-            reset_payload_task();
-            printf("PAYLOAD task reset due to health check\r\n");
-        }
-        if (faults & HEALTH_BIT_OBDH) {
-            reset_obdh_task();
-            printf("OBDH task reset due to health check\r\n");
-        }
+/**
+ * @brief Handle health faults by resetting unresponsive tasks.
+ * @param faults Bitmask of faulty subsystems from health_check().
+ */
+static void handle_health_faults(EventBits_t faults)
+{
+    if (faults & HEALTH_BIT_EPS) {
+        reset_eps_task();
+        printf("EPS task reset due to health check\r\n");
     }
-    else
-    {
-        pet_watchdog();
+    if (faults & HEALTH_BIT_COMMS) {
+        reset_comms_task();
+        printf("COMMS task reset due to health check\r\n");
+    }
+    if (faults & HEALTH_BIT_PAYLOAD) {
+        reset_payload_task();
+        printf("PAYLOAD task reset due to health check\r\n");
+    }
+    if (faults & HEALTH_BIT_OBDH) {
+        reset_obdh_task();
+        printf("OBDH task reset due to health check\r\n");
     }
 }
 
@@ -320,13 +315,6 @@ void reset_obdh_task(void)
         // error
     }
 }
-
-void pet_watchdog(void)
-{
-    HAL_IWDG_Refresh(&hiwdg); 
-}
-
-
 
 // REVISAR!!
     // The obc task / manager task is the only one that is in charge of changing satellite modes

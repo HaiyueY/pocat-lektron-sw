@@ -77,8 +77,32 @@ void health_set_expected(EventBits_t expected_bits);
  * Should be called periodically by the OBC task. When the health check
  * period has elapsed, returns which expected subsystems failed to kick.
  *
+ * @param period_elapsed Output parameter set to pdTRUE if the health check
+ *                       period elapsed and a check was performed, pdFALSE
+ *                       if still waiting. Can be NULL if not needed.
  * @return Bitmask of faulty subsystems (bits set for subsystems that failed
  *         to kick). Returns 0 if the check period has not elapsed yet or
  *         if all expected subsystems have kicked.
  */
-EventBits_t system_health(void);
+EventBits_t system_health(BaseType_t *period_elapsed);
+
+/**
+ * @brief Register the hardware watchdog handle.
+ *
+ * Must be called during initialization to enable automatic IWDG refresh
+ * when the system is healthy.
+ *
+ * @param hiwdg Pointer to the IWDG handle (IWDG_HandleTypeDef*).
+ */
+void health_register_iwdg(void *hiwdg);
+
+/**
+ * @brief Perform health check and refresh watchdog if healthy.
+ *
+ * This function combines system_health() with automatic IWDG refresh.
+ * Call this periodically from the OBC task.
+ *
+ * @return Bitmask of faulty subsystems. Returns 0 if all subsystems are
+ *         healthy (watchdog is refreshed in this case).
+ */
+EventBits_t health_check(void);

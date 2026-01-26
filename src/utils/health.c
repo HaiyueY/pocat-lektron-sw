@@ -12,9 +12,14 @@
  */
 
 #include "health.h"
+#include "log.h"
+#include "stm32l4xx_hal.h"
 
 /** @brief Event group handle for health bit tracking. */
 static EventGroupHandle_t health_eg = NULL;
+
+/** @brief Pointer to the IWDG handle for watchdog refresh. */
+static IWDG_HandleTypeDef *iwdg_handle = NULL;
 
 /** @brief Bitmask of subsystems expected to kick each period. */
 static EventBits_t expected_bits = 0;
@@ -99,13 +104,17 @@ void health_set_expected(EventBits_t exp_bits)
 }
 
 
-EventBits_t system_health(void)
+EventBits_t system_health(BaseType_t *period_elapsed)
 {
-
     TickType_t now = xTaskGetTickCount();
 
     if (time_reached(now, next_deadline))
     {
+        if (period_elapsed != NULL)
+        {
+            *period_elapsed = pdTRUE;
+        }
+
         lock();
         EventBits_t expected = expected_bits;
         unlock();
@@ -116,8 +125,33 @@ EventBits_t system_health(void)
 
         start_new_period(now);
 
-        return missing;  
+        return missing;
+    }
+
+    if (period_elapsed != NULL)
+    {
+        *period_elapsed = pdFALSE;
     }
 
     return 0;
+}
+
+void health_register_iwdg(void *hiwdg)
+{
+    iwdg_handle = (IWDG_HandleTypeDef *)hiwdg;
+}
+
+EventBits_t health_check(void)
+{
+    BaseType_t period_elapsed;
+    EventBits_t faults = system_health(&period_elapsed);
+
+    // Only refresh IWDG after an actual health check passed (not during wait)
+    if (period_elapsed && faults == 0 && iwdg_handle != NULL)
+    {
+        printf("Health check OK, refreshing IWDG\r\n");
+        HAL_IWDG_Refresh(iwdg_handle);
+    }
+
+    return faults;
 }
