@@ -1,11 +1,9 @@
 /**
  * @file log.c
- * @author your name (you@domain.com)
- * @brief 
- * @version 0.1
- * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
+ * @brief Debug logging support. 
+ * @details It currently simply provides a redirection of standard output to a serial interface.
+ * @author Guillermo O'Tuama Pascual
+ * @date 2026-01-22
  * 
  */
 
@@ -14,8 +12,6 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 
-// IMPORTANT: ONLY FOR DEBUGGING PURPOSES.
-// TASK ENTERS CRITICAL SECTION TO PRINT WITHOUT INTERRUPTION.
 int _write(int file, char *ptr, int len)
 {
     taskENTER_CRITICAL();

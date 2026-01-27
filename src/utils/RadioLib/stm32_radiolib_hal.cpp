@@ -1,80 +1,43 @@
 /**
- * @file stm32_radiolib_hal.cpp
- * @author your name (you@domain.com)
- * @brief 
- * @version 0.1
- * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
+ * @file   stm32_radiolib_hal.cpp
+ * @brief STM32 implementation of the RadioLib HAL interface
+ * @author Guillermo O'Tuama Pascual
+ * @date 2026-01-22
  * 
  */
 
 #include "stm32_radiolib_hal.h"
 
-// Realizamos un callback forwarding de la funcion de stm32 HAL a nuestra implementacion en stm32RadioLibHal
+// ============================================================================
+// Global/Static Definitions
+// ============================================================================
+
+/** @brief Forwarding of the HAL_GPIO_EXTI_Callback to our implementation. */
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     // Forward to our static method
     stm32RadioLibHal::handleExtiCallback(GPIO_Pin);
 }
 
-
 void (*stm32RadioLibHal::_extiCallbacks[16])(void) = { nullptr };
 
+// The non-obvious decisions for the implementation are commented:
 
-// for radiolib use with stm32 spi and tim5 have to be correctly initialized in main.c
+// ============================================================================
+// Public Member Functions
+// ============================================================================
 
-
-// ----------------Helper private functions ---------------------
-
-// Los pines los codificamos como un uint32_t donde los 16 bits superiores son el port y los 16 inferiores el pin (port+pin)
-
-
-GPIO_TypeDef* stm32RadioLibHal::getPort(uint32_t pin)
-{
-    uint32_t portIndex = (pin >> 16) & 0xFF;
-
-    switch (portIndex) {
-        case 0: return GPIOA;
-        case 1: return GPIOB;
-        case 2: return GPIOC;
-        case 3: return GPIOD;
-        case 4: return GPIOE;
-        case 5: return GPIOF;
-        case 6: return GPIOG;
-        default:
-            configASSERT(false);   // To-do: como tratamos esto? de momento dejo así
-            return nullptr;
-    }
-}
-
-
-// Extract the pin mask (lower 16 bits)
-uint16_t stm32RadioLibHal::getPinMask(uint32_t pin) { // helper for extracting pin from port+pin number
-    return (uint16_t)(pin & 0xFFFF);
-}
-
-void stm32RadioLibHal::enablePortClock(GPIO_TypeDef* port)
-{
-    if (port == GPIOA)      __HAL_RCC_GPIOA_CLK_ENABLE();
-    else if (port == GPIOB) __HAL_RCC_GPIOB_CLK_ENABLE();
-    else if (port == GPIOC) __HAL_RCC_GPIOC_CLK_ENABLE();
-    else if (port == GPIOD) __HAL_RCC_GPIOD_CLK_ENABLE();
-    else if (port == GPIOE) __HAL_RCC_GPIOE_CLK_ENABLE();
-    else if (port == GPIOF) __HAL_RCC_GPIOF_CLK_ENABLE();
-    else if (port == GPIOG) __HAL_RCC_GPIOG_CLK_ENABLE();
-    else {
-        configASSERT(false); // invalid GPIO port pointer
-    }
-}
-
-
-
-// ---------------- stm32RadioLibHal implementation ---------------------
-
+/* 
+ * Base GPIO STM32 configuration passed to RadioLibHal:
+ *  - GPIO_MODE_INPUT        : mode used for input pins 
+ *  - GPIO_MODE_OUTPUT_PP    : push-pull output mode for control pins
+ *  - GPIO_PIN_RESET / SET   : logical low/high levels for GpioLevelLow/High
+ *  - GPIO_MODE_IT_RISING    : EXTI configuration for interrupts on rising edges
+ *  - GPIO_MODE_IT_FALLING   : EXTI configuration for interrupts on falling edges
+ */
 stm32RadioLibHal::stm32RadioLibHal(SPI_HandleTypeDef* spi) 
     : RadioLibHal(
         GPIO_MODE_INPUT,
-        GPIO_MODE_OUTPUT_PP, // push-pull output
+        GPIO_MODE_OUTPUT_PP,
         GPIO_PIN_RESET,
         GPIO_PIN_SET,
         GPIO_MODE_IT_RISING,
@@ -83,47 +46,39 @@ stm32RadioLibHal::stm32RadioLibHal(SPI_HandleTypeDef* spi)
       _spi(spi),
       _startMillis(0) {
 }
-    
-// para utilitzar esta fucion vamos a tener que codificar el pin y el port en el primer parametero "pin"
-// we have to be able to enable interrupt for atachInterrupt
-// do we need to manage pinMode set as interrupt?? -> bc then __HAL_RCC_SYSCFG_CLK_ENABLE();
+
+/* 
+ * Generic GPIO configuration used by RadioLib:
+ *  - Pull = GPIO_NOPULL: pin configured with no internal pull-up/down.
+ *  - Speed = GPIO_SPEED_FREQ_LOW: pin configured with low speed.
+ * @todo Beware GPIO_SPEED_FREQ_LOW might not be enough for some pins. Check this.
+ */
 void stm32RadioLibHal::pinMode(uint32_t pin, uint32_t mode) { 
 
     if(pin == RADIOLIB_NC) {
         return;
     }
 
-    // recogemos puerto y pin:
     GPIO_TypeDef* port = getPort(pin);
     uint16_t pinMask = getPinMask(pin);
 
-    /* GPIO Ports Clock Enable */
     enablePortClock(port);
 
-    /*Configure GPIO pin Output Level */
-    // Do I have to use HAL_GPIO_WritePin???
-
-    /*Configure GPIO pin :  */
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = pinMask;
-    GPIO_InitStruct.Pull = GPIO_NOPULL; 
+    GPIO_InitStruct.Pin   = pinMask;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL; 
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Mode = mode;
+    GPIO_InitStruct.Mode  = mode;
     HAL_GPIO_Init(port, &GPIO_InitStruct);
 
-    // What about this here?? Look into it:
-    // HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-    // HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-    // HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-    // to do
-    
 }
 
 void stm32RadioLibHal::digitalWrite(uint32_t pin, uint32_t value) {
+
     if(pin == RADIOLIB_NC) {
         return;
     }
+
     GPIO_TypeDef* port = getPort(pin);
     uint16_t pinMask = getPinMask(pin);
     HAL_GPIO_WritePin(
@@ -135,42 +90,47 @@ void stm32RadioLibHal::digitalWrite(uint32_t pin, uint32_t value) {
 }
 
 uint32_t stm32RadioLibHal::digitalRead(uint32_t pin) {
+
     if (pin == RADIOLIB_NC) {
-        return GpioLevelLow;    // or simply 0
+        return 0;
     }
+
     GPIO_TypeDef* port = getPort(pin);
     uint16_t pinMask = getPinMask(pin);
     return (HAL_GPIO_ReadPin(port, pinMask) == GPIO_PIN_SET) ? GpioLevelHigh : GpioLevelLow;
 }
 
-
-// verify this is the code generated when setting up an external interrupt with STM32CubeMX. Do it for for different lines
+/** 
+ @todo Complete with STM32CubeMX code for attachInterrupt
+ @todo Check priority value
+  */
 void stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb)(void), uint32_t mode) {
+    
     if (interruptNum == RADIOLIB_NC || interruptCb == nullptr) {
         return;
     }
-    // tratamos interruptNum como un port+pin
+
     GPIO_TypeDef* port = getPort(interruptNum);
     uint16_t pinMask = getPinMask(interruptNum);
-    int line = getExtiLineFromPinMask(pinMask); //extract exti line
-    if (line < 0 || line > 15) { // validate line
-        return;    // invalid pin
-    }
 
-    __HAL_RCC_SYSCFG_CLK_ENABLE(); // review
 
-    // configure GPIO
+    __HAL_RCC_SYSCFG_CLK_ENABLE(); 
+
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin   = pinMask;
-    GPIO_InitStruct.Pull  = GPIO_NOPULL;          // Change if needed
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;          
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Mode  = mode;                 // Already a HAL mode from RadioLib (RISING/FALLING)
+    GPIO_InitStruct.Mode  = mode;                
     HAL_GPIO_Init(port, &GPIO_InitStruct);
 
-    // Store callback for this EXTI line
+    int line = getExtiLineFromPinMask(pinMask); 
+    if (line < 0 || line > 15) {
+        return;   
+    }
+   
     _extiCallbacks[line] = interruptCb;
 
-    // Enable appropriate NVIC IRQ
+    
     IRQn_Type irqn;
     if (line <= 4) {
         static const IRQn_Type table[5] = {
@@ -182,12 +142,14 @@ void stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb
     } else {
         irqn = EXTI15_10_IRQn;
     }
-
-    // set priority and enable
-    HAL_NVIC_SetPriority(irqn, 5, 0); // <- To-do: check priority value
+    
+    HAL_NVIC_SetPriority(irqn, 5, 0);
     HAL_NVIC_EnableIRQ(irqn);
 }
 
+/**
+ @todo Complete with STM32CubeMX code for detachInterrupt
+*/
 void stm32RadioLibHal::detachInterrupt(uint32_t interruptNum) {
     if (interruptNum == RADIOLIB_NC) {
         return;
@@ -227,6 +189,7 @@ void stm32RadioLibHal::detachInterrupt(uint32_t interruptNum) {
         }
         bool anyUsed = false;
         for (int i = groupStart; i <= groupEnd; ++i) {
+   
             if (_extiCallbacks[i] != nullptr) {
                 anyUsed = true;
                 break;
@@ -246,41 +209,40 @@ void stm32RadioLibHal::delay(RadioLibTime_t ms) {
 #endif
 }
 
+/* The delay is implemented as a busy wait. */
+/** @todo Check if a busy wait implementation works for the case.*/
 void stm32RadioLibHal::delayMicroseconds(RadioLibTime_t us) {
 #if !defined(RADIOLIB_CLOCK_DRIFT_MS)
     RadioLibTime_t start = micros();
-    while ((micros() - start) < us)
-        ; // do nothing
+    while ((micros() - start) < us); 
 #else
     RadioLibTime_t corrected = us * 1000 / (1000 + RADIOLIB_CLOCK_DRIFT_MS);
     RadioLibTime_t start = micros();
-    while ((micros() - start) < corrected)
-        ; // do nothing
+    while ((micros() - start) < corrected); 
 #endif
 }
-
 
 RadioLibTime_t stm32RadioLibHal::millis() {
 #if !defined(RADIOLIB_CLOCK_DRIFT_MS)
     return HAL_GetTick();
 #else
-    // Same correction RadioLib uses on Arduino
     return HAL_GetTick() * 1000 / (1000 + RADIOLIB_CLOCK_DRIFT_MS);
 #endif
 }
 
-
-// To-do: hay que mirar esto cuando cambiemos de modo operacional
+/** @todo check thif this works when operational mode changes are implemented, 
+ * because TIM5 is clocked from APB1 bus.
+ */
 RadioLibTime_t stm32RadioLibHal::micros() {
 #if !defined(RADIOLIB_CLOCK_DRIFT_MS)
-    return __HAL_TIM_GET_COUNTER(&htim5); // hay que añadir header del hal para esto?
+    return __HAL_TIM_GET_COUNTER(&htim5);
 #else
     return __HAL_TIM_GET_COUNTER(&htim5) * 1000 / (1000 + RADIOLIB_CLOCK_DRIFT_MS);
 #endif
 }
 
-
-long stm32RadioLibHal::pulseIn(uint32_t pin, uint32_t state, RadioLibTime_t timeout) {
+long stm32RadioLibHal::pulseIn(uint32_t pin, uint32_t state, RadioLibTime_t timeout)
+{
     
     if(pin == RADIOLIB_NC) {
         return 0;
@@ -294,43 +256,41 @@ long stm32RadioLibHal::pulseIn(uint32_t pin, uint32_t state, RadioLibTime_t time
 
     uint8_t targetState = (state ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
-    // esperamos a que el pin salga de target state
+    // wait for the pin to go out of target state
     while (HAL_GPIO_ReadPin(port, pinMask) == targetState) {
         if ((uint32_t)(micros() - startMicros) > timeoutMicros) return 0;
         yield();
     }
 
-    // esperamos a que el pin vuelva a entrar en target state
+    // wait for the pin to go back to target state
     while (HAL_GPIO_ReadPin(port, pinMask) != targetState) {
        if ((uint32_t)(micros() - startMicros) > timeoutMicros) return 0;
         yield();
     }
 
-    // medimos el tiempo que el pin se mantiene en target state
+    // measure the time the pin remains in target state
     uint32_t pulseStart = micros();
     while (HAL_GPIO_ReadPin(port, pinMask) == targetState) {
         if ((uint32_t)(micros() - startMicros) > timeoutMicros) return 0;
         yield();
     }
     return micros() - pulseStart;
+
 }
 
-void stm32RadioLibHal::spiBegin() {
-    // No need for this in stm32. Init SPI at boot!!
-}
+/* No need to implement this in stm32. Init SPI at boot! */
+void stm32RadioLibHal::spiBegin() {}
 
-void stm32RadioLibHal::spiBeginTransaction() {
-    // No need for beginning transaction in stm32
-}
+/* No need to for beginning transaction in stm32. Just use the spi handle!*/
+void stm32RadioLibHal::spiBeginTransaction() {}
 
+/** @todo Protect SPI1 with a mutex/semaphore if multiple tasks may access it concurrently. */
 void stm32RadioLibHal::spiTransfer(uint8_t* out, size_t len, uint8_t* in)
 {
     configASSERT(!xPortIsInsideInterrupt());
 
     if (len == 0) return;
     
-    // To-do: implementar mutex/semaphore si hay añadimo tarea que utilize spi
-    // hacemos esto porque la comunicación es full-duplex
     static uint8_t auxTx = 0x00;
     static uint8_t auxRx;
 
@@ -340,23 +300,19 @@ void stm32RadioLibHal::spiTransfer(uint8_t* out, size_t len, uint8_t* in)
     HAL_SPI_TransmitReceive(_spi, tx, rx, len, HAL_MAX_DELAY); // To-do: timeout value?
 }
 
+/*  No need to for ending spi transaction in stm32. */
+void stm32RadioLibHal::spiEndTransaction() {}
 
+/* No need to for ending spi in stm32.*/
+void stm32RadioLibHal::spiEnd() {}
 
-void stm32RadioLibHal::spiEndTransaction() {
-    // No need for ending transaction in stm32
-}
+/* No need to initialize anything in stm32. */
+void stm32RadioLibHal::init() {}
 
-void stm32RadioLibHal::spiEnd() {
-    // No need for ending spi for stm32. This is arduino specific
-}
+/* No need to terminate anything in stm32. */
+void stm32RadioLibHal::term() {}
 
-void stm32RadioLibHal::init() {
-    // No need to initialize anything
-}
-void stm32RadioLibHal::term() {
-    // No implementation needed for STM32
-}
-
+/** @todo Check if this function is necesary for our use case (communicating with SX1262)*/
 void stm32RadioLibHal::tone(uint32_t pin, unsigned int frequency, RadioLibTime_t duration) {
 
     if (pin == RADIOLIB_NC || frequency == 0) { //To-do: might have to protect frequency values a bit more. > than a certain value?
@@ -413,7 +369,7 @@ void stm32RadioLibHal::tone(uint32_t pin, unsigned int frequency, RadioLibTime_t
     }
 }
 
-
+/** @todo Check if this function is necesary for our use case (communicating with SX1262)*/
 void stm32RadioLibHal::noTone(uint32_t pin) {
     if (pin == RADIOLIB_NC) {
         return;
@@ -434,7 +390,10 @@ void stm32RadioLibHal::noTone(uint32_t pin) {
     HAL_GPIO_WritePin(port, pinMask, GPIO_PIN_RESET);
 }
 
-void stm32RadioLibHal::yield() { // dangerous en contexto interrupt, no se deberia de llamar desde ISR
+/* This implementation assumes yield is called from a task, not from an interrupt. 
+ * It does not make sense to call yield from an interrupt.
+*/
+void stm32RadioLibHal::yield() {
     // Allow task switching if scheduler is active
     if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
         if (!xPortIsInsideInterrupt()) {
@@ -443,28 +402,75 @@ void stm32RadioLibHal::yield() { // dangerous en contexto interrupt, no se deber
     }
 }
 
-uint32_t stm32RadioLibHal::pinToInterrupt(uint32_t pin) {
-    // trataremos los interruptpins como si fueran un pin normal, mediante codificación port+pin
-    return pin;
-}   
+/* We will treat interrupt pins as normal pins, by encoding the port and pin as a single number. */
+uint32_t stm32RadioLibHal::pinToInterrupt(uint32_t pin) { return pin; }   
 
+// ============================================================================
+// Private Helper Functions 
+// ============================================================================
 
-// ----- private functions ------
-int stm32RadioLibHal::getExtiLineFromPinMask(uint16_t pinMask) {
-    
-    if (pinMask == 0 || (pinMask & (pinMask - 1)) != 0) {
-        return -1;
+/* We encode the pins as a uint32_t where the upper 16 bits are the port and 
+the lower 16 bits are the pin (port+pin).*/
+GPIO_TypeDef* stm32RadioLibHal::getPort(uint32_t pin)
+{
+    uint32_t portIndex = (pin >> 16) & 0xFF;
+
+    switch (portIndex) {
+        case 0: return GPIOA;
+        case 1: return GPIOB;
+        case 2: return GPIOC;
+        case 3: return GPIOD;
+        case 4: return GPIOE;
+        case 5: return GPIOF;
+        case 6: return GPIOG;
+        default:
+            configASSERT(false);
+            return nullptr;
     }
-
-    for (int line = 0; line < 16; ++line) {
-        if (pinMask & (1U << line)) {
-            return line;
-        }
-    }
-    return -1; // invalid or multiple bits set
 }
 
+uint16_t stm32RadioLibHal::getPinMask(uint32_t pin) {
+    return (uint16_t)(pin & 0xFFFF);
+}
 
+void stm32RadioLibHal::enablePortClock(GPIO_TypeDef* port)
+{
+    if (port == GPIOA)      __HAL_RCC_GPIOA_CLK_ENABLE();
+    else if (port == GPIOB) __HAL_RCC_GPIOB_CLK_ENABLE();
+    else if (port == GPIOC) __HAL_RCC_GPIOC_CLK_ENABLE();
+    else if (port == GPIOD) __HAL_RCC_GPIOD_CLK_ENABLE();
+    else if (port == GPIOE) __HAL_RCC_GPIOE_CLK_ENABLE();
+    else if (port == GPIOF) __HAL_RCC_GPIOF_CLK_ENABLE();
+    else if (port == GPIOG) __HAL_RCC_GPIOG_CLK_ENABLE();
+    else {
+        configASSERT(false); 
+        return;
+    }
+}
+
+int stm32RadioLibHal::getExtiLineFromPinMask(uint16_t pinMask) {
+    // Check if exactly one bit is set
+    if (pinMask == 0 || (pinMask & (pinMask - 1)) != 0) {
+        configASSERT(false); 
+        return -1;
+    }
+    
+    return __builtin_ctz(pinMask);
+}
+
+/** @todo Refactor to use FreeRTOS task notification instead of direct callback execution.
+ *  Currently executing callbacks directly from ISR is dangerous and can cause issues:
+ *  - Callbacks may call FreeRTOS APIs that are not ISR-safe
+ *  - Long callback execution blocks other interrupts
+ *  - No proper synchronization with task context
+ *  
+ *  Should be replaced with:
+ *  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+ *  xTaskNotifyFromISR(COMMS_TASK, (1 << line), eSetBits, &xHigherPriorityTaskWoken);
+ *  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+ *  
+ *  Then handle the callback execution in the COMMS task context.
+ */
 void stm32RadioLibHal::handleExtiCallback(uint16_t gpioPin) {
     int line = getExtiLineFromPinMask(gpioPin);
     if (line < 0 || line > 15) {
@@ -477,9 +483,4 @@ void stm32RadioLibHal::handleExtiCallback(uint16_t gpioPin) {
     if (cb != nullptr) {
         cb();
     }
-
-    // To-do: en vez de lo de arriba hacer algo asi:
-    // BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    // xTaskNotifyFromISR(COMMS_TASK, (1 << line), eSetBits, &xHigherPriorityTaskWoken);
-    // portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }

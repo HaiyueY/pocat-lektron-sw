@@ -1,28 +1,32 @@
 /**
  * @file main.c
- * @author your name (you@domain.com)
  * @brief System boot and RTOS initialization.
- *
- * Initializes HAL, system clocks, core peripherals (USART2, SPI1, TIM5, TIM2),
- * optionally configures the independent watchdog (IWDG), creates the main OBC
- * FreeRTOS task, and starts the scheduler.
- *
+ * @author Guillermo O'Tuama Pascual
  * @date 2026-01-20
- * @copyright Copyright (c) 2026
+ * @details This is the main module. It performs system initialization and starts the FreeRTOS scheduler. It:
+ * - Initializes the HAL library
+ * - Configures the system clock
+ * - Initializes peripherals:
+ *   - GPIO
+ *   - TIM5 (used as a microsecond timebase)
+ *       - provides micros() in stm32_radiolib_hal.cpp
+ *   - TIM2 (used for tone generation in stm32_radiolib_hal.cpp)
+ *       - will probably not be needed for SX1262
+ *   - SPI1 (communication with SX1262)
+ *   - USART2 (debug output)
+ *   - IWDG (independent watchdog)
+ * - It then finally creates the OBC task and starts the FreeRTOS scheduler.
  */
-
 
 #include "main.h"
 #include "stm32l4xx_hal.h"
 #include <stdio.h>
 #include "obc.h"
 
+/** @brief Handle for the OBC FreeRTOS task*/
 static TaskHandle_t obc_task_handle;
-IWDG_HandleTypeDef hiwdg;
 
-
-
-/* ---- Private function prototypes ---- */
+/* Private function prototypes */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM5_Init(void);
@@ -31,47 +35,39 @@ static void MX_SPI1_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_USART2_UART_Init(void);
 
-
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
-{
-    // Disable interrupts and print
-    taskDISABLE_INTERRUPTS();
-    printf("STACK OVERFLOW: %s\r\n", pcTaskName);
-    while(1);
-}
-
-void vApplicationMallocFailedHook(void)
-{
-    taskDISABLE_INTERRUPTS();
-    printf("MALLOC FAILED\r\n");
-    while(1);
-}
-
-// To-do: configure CubeMX to generate code taking into account we are using FreeRTOS
+/**
+ * @brief Main function
+ *
+ * @details 
+ * - Initializes the hardware abstraction layer
+ * - Configures the system clock
+ * - initializes peripherals
+ * - Creates the OBC task
+ * - Starts the FreeRTOS scheduler.
+ *
+ * @return This function should never return.
+ */
 int main(void)
 {
-
-
   HAL_Init();
   SystemClock_Config();  
-  MX_GPIO_Init(); // mirar
+  MX_GPIO_Init(); 
   MX_TIM5_Init();
   MX_TIM2_Init();
   MX_SPI1_Init();
   MX_IWDG_Init();
   MX_USART2_UART_Init();
-  log_init(); 
-  printf("\n\n===========================\r\n");
-  printf("   Pocat Flight Software\r\n");
-  printf("===========================\r\n\n");
+
+  printf("pocat flight software\r\n");
   
   BaseType_t result = xTaskCreate(obc_task, "OBC", OBC_STACK_SIZE, NULL, OBC_PRIORITY, &obc_task_handle);
     if (result != pdPASS) {
         printf("Failed to create OBC task!\r\n");
+    } else {
+        printf("OBC task created successfully\r\n");
     }
 
   vTaskStartScheduler();
-
 
   return 0;
   
@@ -79,21 +75,26 @@ int main(void)
 
 /**
   * @brief System Clock Configuration
-  * @retval None
+  * @details  Configures the system clock tree as follows:
+  * - SYSCLK = 80 MHz derived from the internal 16 MHz HSI oscillator via PLL
+  * - AHB prescaler set to 1 (HCLK = 80 MHz)
+  * - APB1 prescaler set to 1 (PCLK1 = 80 MHz)
+  * - APB2 prescaler set to 1 (PCLK2 = 80 MHz)
+  * - Enables the LSI oscillator for the independent watchdog (IWDG)
   */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
+  /* Configure the main internal regulator output voltage
   */
   if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
     Error_Handler();	
   }
 
-  /** Initializes the RCC Oscillators according to the specified parameters
+  /* Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
@@ -112,8 +113,7 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
+  /* Initializes the CPU, AHB and APB buses clocks */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -129,8 +129,8 @@ void SystemClock_Config(void)
 
 /**
   * @brief IWDG Initialization Function
-  * @param None
-  * @retval None
+  * @details The watchdog is currently set to the maximum prescaler and reload value for debugging purposes.
+  * This results in a countdown period of approximately 30-35 seconds.
   */
 static void MX_IWDG_Init(void)
 {
@@ -158,10 +158,17 @@ static void MX_IWDG_Init(void)
 
 }
 
+
 /**
   * @brief SPI1 Initialization Function
-  * @param None
-  * @retval None
+  * @details Initializes SPI1 as an SPI master (full-duplex) for communication with the SX1262.
+  *  - 8-bit frames
+  *  - Most significant bit (MSB) first
+  *  - Clock polarity low, clock phase 1st edge
+  *  - Software slave management (NSS, chip select controlled via a GPIO pin)
+  *  - Baud rate prescaler set to 16, resulting in a 5 MHz SPI clock derived from APB2
+  * @note chip-select GPIO pin is not configured yet and must be
+  *       initialized separately.
   */
 static void MX_SPI1_Init(void)
 {
@@ -200,8 +207,10 @@ static void MX_SPI1_Init(void)
 
 /**
   * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
+  * @details Configured for PWM generation, used for tone generation in stm32_radiolib_hal.cpp.
+  * @note It will probably not be needed for SX1262 operation but it was added for completeness.
+  * If not used, it should be removed.
+  * @todo Remove if not used.
   */
 static void MX_TIM2_Init(void)
 {
@@ -249,8 +258,10 @@ static void MX_TIM2_Init(void)
 
 /**
   * @brief TIM5 Initialization Function
-  * @param None
-  * @retval None
+  * @details TIM5 is used as a microsecond timebase. 
+  * - TIM5 is clocked from APB1. With the APB1 prescaler set to 1 in SystemClock_Config(),
+  *   the timer input clock is 80 MHz.
+  * - TIM5 prescaler is set to 80-1, so timer ticks every 1 microsecond (80 MHz / 80 = 1 MHz).
   */
 static void MX_TIM5_Init(void)
 {
@@ -294,8 +305,7 @@ static void MX_TIM5_Init(void)
 
 /**
   * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
+  * @details USART2 is configured for debug output using printf() at 115200 baud.
   */
 static void MX_USART2_UART_Init(void)
 {
@@ -329,8 +339,6 @@ static void MX_USART2_UART_Init(void)
 
 /**
   * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
   */
 static void MX_GPIO_Init(void)
 {
@@ -352,7 +360,7 @@ static void MX_GPIO_Init(void)
 
 /**
   * @brief  This function is executed in case of error occurrence.
-  * @retval None
+  * @todo Implement error handling mechanism.
   */
 void Error_Handler(void)
 {

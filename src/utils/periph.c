@@ -1,11 +1,11 @@
 /**
  * @file periph.c
- * @author your name (you@domain.com)
- * @brief 
- * @version 0.1
+ * @brief Global peripheral handle definitions.
+ * @details 
+ * This file defines the global STM32 HAL peripheral handles that will then 
+ * be initialized during system startup in main.c.
+ * @author Guillermo O'Tuama Pascual
  * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
  * 
  */
 
