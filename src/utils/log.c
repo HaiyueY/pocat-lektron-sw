@@ -14,15 +14,6 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 
-static SemaphoreHandle_t uart_mutex = NULL;
-
-void log_init(void)
-{
-    if (uart_mutex == NULL) {
-        uart_mutex = xSemaphoreCreateMutex();
-    }
-}
-
 // IMPORTANT: ONLY FOR DEBUGGING PURPOSES.
 // TASK ENTERS CRITICAL SECTION TO PRINT WITHOUT INTERRUPTION.
 int _write(int file, char *ptr, int len)
