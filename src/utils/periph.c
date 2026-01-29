@@ -13,6 +13,6 @@
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim5;
-SPI_HandleTypeDef hspi1;
+SPI_HandleTypeDef hspi2;
 UART_HandleTypeDef huart2;
 IWDG_HandleTypeDef hiwdg;

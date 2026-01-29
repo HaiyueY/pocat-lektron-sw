@@ -12,9 +12,8 @@
 #include "stm32l4xx_hal.h"
 
 /** @brief Global SPI handle. Used for communication with the SX1262. 
- *  @todo Might have to modify it, picked spi1 for radiolib, but it might have to be another.
 */
-extern SPI_HandleTypeDef hspi1;  
+extern SPI_HandleTypeDef hspi2;  
 
 /** @brief Global TIM2 handle. Temporarily declared for tone generation with Radiolib.
  *  @todo Might not be needed for SX1262 operation, remove if not used.
