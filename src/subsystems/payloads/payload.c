@@ -59,9 +59,9 @@ void process_payload(void) {
 
     uint32_t notificationValue = wait_for_notification();
 
-    if (notificationValue & PAYLOAD_PHOTO_CAPTURE) {
-        capture_photo();
-    }
+    // if (notificationValue & PAYLOAD_PHOTO_CAPTURE) {
+    //     capture_photo();
+    // }
     // if ... (not else if!!)
 
 }

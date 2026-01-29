@@ -164,9 +164,9 @@ static uint32_t waitForNotification(void) {
 }
 
 static void handlePayloadCapture(void) {
-    xTaskNotify(payload_task_handle,  // Fixed: was xPayloadTaskHandle
-            PAYLOAD_PHOTO_CAPTURE,
-            eSetBits);
+    // xTaskNotify(payload_task_handle,  // Fixed: was xPayloadTaskHandle
+    //         PAYLOAD_PHOTO_CAPTURE,
+    //         eSetBits);
     // ...
 }
 
@@ -184,7 +184,7 @@ ObcState_t Nominal(void) {
 	{
         uint32_t notificationValue = waitForNotification();
 
-        if ( notificationValue & OBC_PHOTO_CAPTURE ) handlePayloadCapture();
+        //  if ( notificationValue & OBC_PHOTO_CAPTURE ) handlePayloadCapture();
         // ... handle other events
 	}
 }

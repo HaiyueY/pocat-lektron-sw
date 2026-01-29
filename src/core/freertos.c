@@ -1,32 +1,59 @@
+/* USER CODE BEGIN Header */
 /**
- * @file freertos.c
- * @author your name (you@domain.com)
- * @brief 
- * @version 0.1
- * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
- * 
- */
+  ******************************************************************************
+  * File Name          : freertos.c
+  * Description        : Code for freertos applications
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
 
+/* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
 #include "task.h"
+#include "main.h"
 
-// Can be implemented in the future for run time stats
-void configureTimerForRunTimeStats(void) {}
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
 
-unsigned long getRunTimeCounterValue(void) { return 0; }
+/* USER CODE END Includes */
 
-// This function is called by FreeRTOS to get the memory for the idle task.
-// It is used to allocate static memory for the idle task's TCB and stack.
-void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer,
-                                    StackType_t **ppxIdleTaskStackBuffer,
-                                    uint32_t *pulIdleTaskStackSize )
-{
-  static StaticTask_t xIdleTaskTCB;
-  static StackType_t uxIdleTaskStack[ configMINIMAL_STACK_SIZE ];
-  *ppxIdleTaskTCBBuffer = &xIdleTaskTCB;
-  *ppxIdleTaskStackBuffer = uxIdleTaskStack;
-  *pulIdleTaskStackSize = configMINIMAL_STACK_SIZE;
-}
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN Variables */
+
+/* USER CODE END Variables */
+
+/* Private function prototypes -----------------------------------------------*/
+/* USER CODE BEGIN FunctionPrototypes */
+
+/* USER CODE END FunctionPrototypes */
+
+/* Private application code --------------------------------------------------*/
+/* USER CODE BEGIN Application */
+
+/* USER CODE END Application */
 

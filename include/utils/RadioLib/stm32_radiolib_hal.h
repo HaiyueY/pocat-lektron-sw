@@ -171,6 +171,10 @@ class stm32RadioLibHal : public RadioLibHal {
         * @returns The interrupt number of a given pin.
         */
         virtual uint32_t pinToInterrupt(uint32_t pin);
+
+                
+        /** @brief Handle the EXTI callback. */
+        static void handleExtiCallback(uint16_t pin);
                 
     private:
         /** @brief Pointer to the SPI handle. */
@@ -193,9 +197,7 @@ class stm32RadioLibHal : public RadioLibHal {
 
         /** @brief Enable the clock for a port. */
         void enablePortClock(GPIO_TypeDef* port);   
-        
-        /** @brief Handle the EXTI callback. */
-        static void handleExtiCallback(uint16_t pin);
+
 };
 
 #endif

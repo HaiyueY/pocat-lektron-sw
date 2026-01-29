@@ -6,7 +6,7 @@
 
 
 // Instantiate C++ outside of extern "C"
-static stm32RadioLibHal hal(&hspi1);  
+static stm32RadioLibHal hal(&hspi2);  
 
 static Module mod(&hal, 1, 2, 3, 4); // TODO: change pins to actual ones (these are made up) NSS, DIO1, BUSY, RESET
 static SX1262 radio(&mod);
