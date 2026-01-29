@@ -1,3 +1,13 @@
+/**
+ * @file radiolib_wrapper.h
+ * @author Jan Pruneda Marcet
+ * @brief C wrapper interface for RadioLib
+ * @date 2026-01-29
+ * 
+ * @details This header provides a C-compatible interface to the RadioLib C++ library,
+ * allowing the radio functionality to be used from C code.
+ */
+
 #ifndef INC_WRAPPER_H
 #define INC_WRAPPER_H
 
@@ -7,52 +17,110 @@
 extern "C" {
 #endif
 
-
+/** @brief Callback struct for radio events. Assign your C functions before calling RadioLib_Init(). */
 typedef struct {
-    void (*TxDone)(void); // Transmissio acabada
-    void (*RxDone)(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr); // Recepcio acabada
-    void (*TxTimeout)(void); // Timeout de transmissio
-    void (*RxTimeout)(void); // Timeout de recepcio
-    void (*RxError)(void); // Error de recepcio
-    void (*CadDone)(int channelActivityDetected); // Deteccio de canal acabada
+    /** @brief Transmission finished */
+    void (*TxDone)(void);
+    /**
+     * @brief Reception finished.
+     * @param payload Received data buffer.
+     * @param size Length in bytes.
+     * @param rssi Received signal strength (dBm).
+     * @param snr  Signal-to-noise ratio (dB).
+     */
+    void (*RxDone)(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
+    /** @brief Transmission timeout */
+    void (*TxTimeout)(void);
+    /** @brief Reception timeout */
+    void (*RxTimeout)(void);
+    /** @brief Reception error (e.g. CRC) */
+    void (*RxError)(void);
+    /**
+     * @brief Channel Activity Detection (CAD) finished.
+     * @param channelActivityDetected 0 = channel free (safe to transmit), non-zero = LoRa activity detected (channel busy).
+     */
+    void (*CadDone)(int channelActivityDetected);
 } RadioEvents_t;
 
+/**
+ * @brief Initialise the radio and assign the callbacks.
+ * @param events Pointer to RadioEvents_t with your callback functions (can be NULL for unused).
+ */
+void RadioLib_Init(RadioEvents_t *events);
 
-void RadioLib_Init(RadioEvents_t *events); // Inicialitza la radio i assigna els callbacks
+/**
+ * @brief Set the frequency.
+ * @param freq Operating frequency in Hz.
+ */
+void RadioLib_SetChannel(uint32_t freq);
 
-void RadioLib_SetChannel(uint32_t freq); // Configura la frequencia
+/**
+ * @brief Configure TX parameters.
+ * @note RadioLib CR is different from SX1262Config: we pass 1–4 and add 4 internally (RadioLib uses 5–8).
+ * @param sf         Spreading factor; controls sensitivity and range.
+ * @param cr         Coding rate; controls error correction.
+ * @param power      Transmission power (dBm).
+ * @param bw_code    Bandwidth; controls channel bandwidth (0=125kHz, 1=250kHz, 2=500kHz).
+ * @param iqInverted IQ signal inversion (to avoid collisions).
+ * @param crcOn      Enable CRC (checksum for errors).
+ * @param preambleLen Preamble length (synchronisation sequence).
+ */
+void RadioLib_SetTxConfig(
+    uint8_t sf,
+    uint8_t cr,
+    int8_t power,
+    uint8_t bw_code,
+    int iqInverted,
+    int crcOn,
+    uint16_t preambleLen);
 
-void RadioLib_SetTxConfig(     // El CR de radioLib es diferente al de SX1262Config, hay que sumarle + 4, Configura els parametres de TX
-    uint8_t sf, // Spreading Factor, controla la sensibilitat i el abast
-    uint8_t cr, // Coding Rate, controla la correccio d'errors
-    int8_t power, // Potencia de transmissio
-    uint8_t bw_code, // Bandwidth, controla l'amplada de banda
-    int iqInverted, // Inversio de la senyal IQ (evitar colisions)
-    int crcOn, // Activar CRC (checksum per errors)
-    uint16_t preambleLen); //Sequencia la sincronitzacio
+/** @brief Configure RX parameters
+ * @param sf         Spreading factor; controls sensitivity and range.
+ * @param cr         Coding rate; controls error correction.
+ * @param bw_code    Bandwidth; controls channel bandwidth (0=125kHz, 1=250kHz, 2=500kHz).
+ * @param iqInverted IQ signal inversion (to avoid collisions).
+ * @param crcOn      Enable CRC (checksum for errors).
+ * @param preambleLen Preamble length (synchronisation sequence).
+ */
+void RadioLib_SetRxConfig(
+    uint8_t sf,
+    uint8_t cr,
+    uint8_t bw_code,
+    int iqInverted,
+    int crcOn,
+    uint16_t preambleLen);
 
-void RadioLib_SetRxConfig( // Configura els parametres de RX
-    uint8_t sf, // Spreading Factor, controla la sensibilitat i el abast
-    uint8_t cr, // Coding Rate, controla la correccio d'errors
-    uint8_t bw_code, // Bandwidth, controla l'amplada de banda
-    int iqInverted, // Inversio de la senyal IQ (evitar colisions)
-    int crcOn, // Activar CRC (checksum per errors)
-    uint16_t preambleLen); //Sequencia la sincronitzacio
+/**
+ * @brief Send the data.
+ * @param buf Pointer to the data to transmit.
+ * @param len Length in bytes.
+ */
+void RadioLib_Send(uint8_t *buf, uint16_t len);
 
-void RadioLib_Send(uint8_t *buf, uint16_t len); // Envia les dades
+/**
+ * @brief Enter receive mode and wait for a packet.
+ * @param timeoutMs Timeout in milliseconds; 0 = wait forever.
+ * @return RadioLib error code (e.g. RADIOLIB_ERR_NONE on success).
+ */
+int16_t RadioLib_Rx(uint32_t timeoutMs);
 
-int16_t RadioLib_Rx(uint32_t timeoutMs); // Entra en mode recepcio durant timeoutMs milisegons
+/** @brief Enter sleep mode */
+int16_t RadioLib_Sleep(void);
 
-int16_t RadioLib_Sleep(void); // Entra en mode sleep
+/** @brief Enter standby mode */
+int16_t RadioLib_Standby(void);
 
-int16_t RadioLib_Standby(void); // Entra en mode standby
+/** @brief Start channel detection. 
+  * @todo Do we really need this function?
+*/
+int16_t RadioLib_StartCad(void);
 
-int16_t RadioLib_StartCad(void); // Comença la detecció de canal. Ens cal realment aquesta funcio??
-
-void RadioLib_IrqProcess(void); // Funcio que no fa res pq radiolib ja fa la seva gestio, pero aixi corregim menys codi
+/** @brief Process radio interrupts. 
+ * @note No-op function. RadioLib already handles it but it kept so that call sites need no changes. */
+void RadioLib_IrqProcess(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif /* INC_WRAPPER_H */
