@@ -12,6 +12,39 @@
 #ifndef INC_COMMS_H_
 #define INC_COMMS_H_
 
+#include <stdint.h>
+
+/* ---- Type definitions ---- */
+
+typedef enum {
+        STARTUP,
+        TRANSMIT,
+        RECEIVE,
+        SLEEP,
+        STANDBY,
+} CommsState_t;
+
+typedef struct {
+    uint8_t RxData[48];
+    uint8_t TxData[48];
+    uint8_t packetWindow;
+} CommsPackets_t;
+
+typedef struct {
+    int cadMode;
+    int callbackFinished;
+    int cadRx;
+    int txAck;
+    int txPayload;
+} CommsFlags_t;
+
+typedef struct {
+    uint32_t RF_F;
+    uint32_t sleepTime;
+    uint32_t rxTime;
+    uint16_t ackTime;
+} CommsSettings_t;
+
 /**
  * @brief Communications task function, it runs the COMMS state machine.
  */
