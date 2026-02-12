@@ -4,6 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "comms.h"
+#include "tc_handler.h"
 #include "radiolib_wrapper.h"
 #include "health.h"
 #include <stdio.h>
@@ -48,11 +49,6 @@ typedef enum {
         STANDBY,
 } CommsState_t;
 
-typedef enum {
-    PING,
-    PAYLOAD_SEND_DATA,
-} telecommandId_t;
-
 typedef struct {
     uint8_t RxData[48];
     uint8_t TxData[48];
@@ -78,7 +74,10 @@ typedef struct {
 /* ---- Module-level variables ---- */
 
 // COMMS State Machine starts in startup state
-static CommsState_t CommsState = STARTUP; 
+static CommsState_t CommsState = STARTUP;
+
+// Task handles for telecommand notification targets (populated during init)
+static tc_task_handles_t tc_handles = {0}; 
 
 // Radio event handler struct
 static RadioEvents_t RadioEvents;
@@ -165,8 +164,6 @@ void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F);
  */
 // need to implement RadioLoRaCadSymbols_t
 // void SX126xConfigureCad( RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout);
-
-CommsState_t ProcessTelecommand();
 
 void TxPrepare(uint8_t messageType);
 
@@ -395,7 +392,13 @@ void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
     //xEventGroupSetBits(xEventGroup, COMMS_RXIRQFlag_EVENT);
     if (CommsPackets.RxData[0]==0xC8 && CommsPackets.RxData[1]==0x9D)
     {
-        CommsState = ProcessTelecommand();
+        int ack = tc_process(CommsPackets.RxData, &tc_handles);
+        if (ack) {
+            CommsFlags.txAck = 1;
+            CommsState = TRANSMIT;
+        } else {
+            CommsState = SLEEP;
+        }
     }
     else
     {
@@ -479,27 +482,6 @@ void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F)
 //     SX126xSetCadParams(cadSymbolNum, cadDetPeak, cadDetMin, LORA_CAD_RX, cadTimeout);
 //     //THE TOTAL CAD TIMEOUT CAN BE EQUAL TO RX TIMEOUT (IT SHALL NOT BE HIGHER THAN 4 SECONDS)
 // }
-
-CommsState_t ProcessTelecommand() // function processes telecommand from RxData
-{
-    
-    telecommandId_t tlcReceived = CommsPackets.RxData[2];
-    switch (tlcReceived) {
-
-        case PING:
-            CommsFlags.txAck = 1; //ACK acts as a ping
-            return TRANSMIT;
-
-        case PAYLOAD_SEND_DATA: // acabar??
-            // plsize=40; // PARA QUE ??
-            // packetwindow=5; // D MOMENTO ES LA UNICA SITUACION I POR ESO NO SE USA
-            CommsFlags.txPayload = 1;
-            return TRANSMIT;
-
-        default:
-            return SLEEP;
-    }
-}
 
 //ack_m or OP?? simply name convention
 void TxPrepare(uint8_t messageType) {
