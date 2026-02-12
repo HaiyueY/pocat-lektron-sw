@@ -82,3 +82,5 @@ res/doc/out/*
 # Doxygen generated documentation
 docs/html/
 docs/latex/
+
+CLAUDE.md
