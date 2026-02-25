@@ -43,7 +43,7 @@
 /* ---- Module-level variables ---- */
 
 // COMMS State Machine starts in startup state
-static CommsState_t CommsState = STARTUP;
+static CommsState_t CommsState = SLEEP;
 
 // Task handles for telecommand notification targets (populated during init)
 static tc_task_handles_t tc_handles = {0}; 
@@ -59,7 +59,7 @@ static CommsFlags_t CommsFlags = {
     .cadMode = 1, // set to 0 in original code
     .cadRx = 0,
     .callbackFinished = 0,
-    .txAck = 0,
+    // .txAck = 0, legacy. ACK's should be enqueued in tx_queue
     .txPayload = 0
 };
 
@@ -71,55 +71,6 @@ static CommsSettings_t CommsSettings = {
     .ackTime = 4000
 };
 
-
-/* ---- Private function prototypes ---- */
-void NextState(void);
-void ProcessRadioCallbacks(void);
-void Startup(void);
-void Sleep(void);
-void Receive(void);
-void Transmit(void);
-void StandBy(void);
-
-/*!
- * \brief Function to be executed on Radio Rx Done event
- */
-void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr ); 
-
-/*!
- * \brief Function to be executed on Radio Tx Done event
- */
-void OnTxDone( void );
-
-
-/*!
- * \brief Function executed on Radio Tx Timeout event
- */
-void OnTxTimeout( void );
-
-/*!
- * \brief Function executed on Radio Rx Timeout event
- */
-void OnRxTimeout( void );
-
-/*!
- * \brief Function executed on Radio Rx Error event
- */
-void OnRxError( void );
-
-/*!
- * \brief Function executed on Radio CAD Done event
- */
-void OnCadDone( int channelActivityDetected);
-
-/**
- * @brief Configures the SX1262 module with specified parameters.
- *
- * @param SF Spreading factor.
- * @param CR Coding rate.
- * @param RF_F RF frequency.
- */
-void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F);
 
 /*!
  * \brief Function configuring CAD parameters
@@ -143,6 +94,9 @@ void TxPrepare(uint8_t messageType);
 // Function prototypes
 void setup_comms(void);
 void process_comms(void);
+void state_sleep(void);
+void state_process(void);
+void state_transmit(void);
 
 
 // DEFINITIONS
@@ -165,87 +119,13 @@ void comms_task(void *pv_parameters)
 void setup_comms(void)
 {
     // Apply the default configuration
-    printf("Setting up COMMS...\r\n");
-}
 
-void process_comms(void)
-{
-    return;
-    switch(CommsState)
-    {   
-
-        case STARTUP:
-            Startup(); break; // Done // Correspondiente a Startup en cmake_comms
-
-        case SLEEP:
-            Sleep(); break; // Done // Correspondiente a una mitad de Sleep en cmake_comms.
-            // Falta COMMS_DEBUG_MODE
-
-        case RECEIVE:
-            Receive(); break; // Done // Correspondiente a la otra mitad de Sleep en cmake_comms, 
-            // añadiendole la recepción de ACKs que eso forma parte de RX en cmake_comms
-
-        case TRANSMIT:
-            Transmit(); break; // To do
-        
-        case STANDBY:
-            StandBy(); break; // To do
-
-    }
-
-    NextState();
-}
-
-void NextState(void) // CAMBIOS DE ESTADO SE HACEN AQUÍ
-{
-    // This function is called at the end of each state to determine the next state
-    switch(CommsState)
-    {
-        case STARTUP:
-            CommsState = SLEEP; break;
-
-        case SLEEP:
-            CommsState = RECEIVE; break;
-
-        case TRANSMIT:
-            CommsState = SLEEP; break;
-
-        case STANDBY:
-            CommsState = SLEEP; break;
-        
-        case RECEIVE:
-            CommsState = SLEEP; break;
-
-        default:
-            break;
-            //ProcessRadioCallbacks(); break; // default si el cambio de estado depende del resultado de un callback
-            // en este caso el estado se cambia al final de cada callback
-    }
-}
-
-// MIRAR ?? 
-/*
-void ProcessRadioCallbacks(void) 
-{
-    while (!CommsFlags.callbackFinished) {
-        RadioLib_IrqProcess();
-        vTaskDelay(pdMS_TO_TICKS(200));
-    }
-    CommsFlags.callbackFinished = 0;
-}
-    */
-
-
-// Unica funcio que esta en RADIOLIB
-// BoardInitMcu(); tret
-void Startup(void)
-{
-    RadioEvents.TxDone = OnTxDone; 
-    RadioEvents.RxDone = OnRxDone; 
-    RadioEvents.TxTimeout = OnTxTimeout;
-    RadioEvents.RxTimeout = OnRxTimeout;
-    RadioEvents.RxError = OnRxError;
-    RadioEvents.CadDone = OnCadDone;
+    // RadioEvents.TxDone = OnTxDone; 
+    // RadioEvents.RxDone = OnRxDone; 
+    // RadioEvents.TxTimeout = OnTxTimeout;
+    // RadioEvents.RxTimeout = OnRxTimeout;
+    // RadioEvents.RxError = OnRxError;
+    // RadioEvents.CadDone = OnCadDone;
 
     RadioLib_Init(&RadioEvents);  // Initializes the Radio with radiolib
     
@@ -268,186 +148,113 @@ void Startup(void)
         1,                   // CRC ON
         LORA_PREAMBLE_LENGTH) ; // Sequencia la sincronitzacio
 
+    CommsState = SLEEP; // Start in sleep state
+
 }
 
-// Sleep state 
-//    COMMS_DEBUG_MODE -> constante <- HAVE TO IMPLEMENT
-void Sleep(void) 
+void process_comms(void)
+{
+    // TODO: Notifications    
+    // if N_COMMS_NEW_CONFIG        New comms configuration available in memory
+    // if N_COMMS_NEW_PARAMS        New parameter set available in memory
+    // if N_COMMS_STOP_RF           Stop RF transmission
+    // if N_COMMS_RESUME_RF         Resume RF transmission
+    // if N_COMMS_TRANSMIT_BEACON   Transmit the beacon
+
+    switch(CommsState)
+    {   
+        case SLEEP:
+            state_sleep(); break;
+
+        case PROCESS:
+            state_process(); break;
+
+        case TRANSMIT:
+            state_transmit(); break;
+    }
+}
+
+
+void state_sleep(void) 
 {   
     RadioLib_Sleep();
     vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
-}
 
-// Receive state 
-//    COMMS_DEBUG_MODE -> constante <- HAVE TO IMPLEMENT
-//    HAVE TO IMPLEMENT ACK RECEPTION
-//    HAVE IMPLEMENTED CAD MODE
-void Receive(void)
-{
-    if (CommsFlags.cadMode) {
+    // TODO:
+    // Receive in CAD mode blocking until timeout or reception, 
+    // if timeout -> stay in sleep, 
+    // if reception -> save packet in memory and change state to process
+    
+    // Reference:
+    // if (CommsFlags.cadMode) {
 
-        if (CommsFlags.cadRx) {
-            // CAD detecta si hi ha activitat
-            CommsFlags.cadRx = 0;
-            RadioLib_Rx(CommsSettings.rxTime);
-        } else {
-            // Fem CAD real (scanChannel)
-            RadioLib_StartCad();
-        }
+    //     if (CommsFlags.cadRx) {
+    //         // CAD detecta si hi ha activitat
+    //         CommsFlags.cadRx = 0;
+    //         RadioLib_Rx(CommsSettings.rxTime);
+    //     } else {
+    //         // Fem CAD real (scanChannel)
+    //         RadioLib_StartCad();
+    //     }
 
-    } else {
-        // Sense CAD: recepció directa
-        RadioLib_Rx(CommsSettings.rxTime);
-    }
-}
+    // } else {
+    //     // Sense CAD: recepció directa
+    //     RadioLib_Rx(CommsSettings.rxTime);
+    // }
 
+    // memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
+    // memcpy(CommsPackets.RxData, payload, size);
+    // Deinterleave(CommsPackets.RxData,size);
 
-void Transmit(void)
-{
-    // Tractar el ACK
-    if (CommsFlags.txAck)
-    {
-        memset(CommsPackets.TxData, 0, sizeof(CommsPackets.TxData)); // netejar el buffer
+    // // ??
+    // // RssiValue = rssi; 
+    // // SnrValue = snr;
+    
+    // //??
+    // //RssiMoy = (((RssiMoy*RxCorrectCnt)+RssiValue)/(RxCorrectCnt+1));
+    // //SnrMoy = (((SnrMoy*RxCorrectCnt)+SnrValue)/(RxCorrectCnt+1));
 
-        TxPrepare(ACK_M);
-
-        Interleave(CommsPackets.TxData, COMMS_PKT_SIZE);
-
-        RadioLib_Send(CommsPackets.TxData, COMMS_PKT_SIZE);
-
-        return;
-    }
-
-    // Payload data ACABAR
-    if (CommsFlags.txPayload)
-    {
-        // Fer tot lo de preparar dades
-        return;
-    }
-
-    // Si arribes aquí, no hi ha res a transmetre
-    CommsState = SLEEP;
-}
-
-
-// Queda UPLOAD_COMMS_CONFIG y COMMS_UPLOAD_PARAMS y OBC_SOFT_REBOOT
-void StandBy(void) 
-{
-    // switch(CommsFlags.tlcReceived)
+    // // ??
+    // //xEventGroupSetBits(xEventGroup, COMMS_RXIRQFlag_EVENT);
+    // if (CommsPackets.RxData[0]==0xC8 && CommsPackets.RxData[1]==0x9D)
     // {
-
-    //     default:
+    //     int ack = tc_process(CommsPackets.RxData, &tc_handles);
+    //     if (ack) {
+    //         CommsFlags.txAck = 1;
+    //         CommsState = TRANSMIT;
+    //     } else {
+    //         CommsState = SLEEP;
+    //     }
+    // }
+    // else
+    // {
+	// 	// COMMSNotUs++;
+	// 	memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
+    //     RadioLib_Standby();
+	// 	CommsState = STANDBY;
     // }
 }
 
-void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
+void state_process(void)
 {
-    memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
-    memcpy(CommsPackets.RxData, payload, size);
-    Deinterleave(CommsPackets.RxData,size);
+   // TODO:
+   // Process the received packet, 
 
-    // ??
-    // RssiValue = rssi; 
-    // SnrValue = snr;
-    
-    //??
-    //RssiMoy = (((RssiMoy*RxCorrectCnt)+RssiValue)/(RxCorrectCnt+1));
-    //SnrMoy = (((SnrMoy*RxCorrectCnt)+SnrValue)/(RxCorrectCnt+1));
+   // if telecommmand -> call tc_process (it shall enqueue ack)
+   // if ACK -> remove acknoleged packet from tx_queue
 
-    // ??
-    //xEventGroupSetBits(xEventGroup, COMMS_RXIRQFlag_EVENT);
-    if (CommsPackets.RxData[0]==0xC8 && CommsPackets.RxData[1]==0x9D)
-    {
-        int ack = tc_process(CommsPackets.RxData, &tc_handles);
-        if (ack) {
-            CommsFlags.txAck = 1;
-            CommsState = TRANSMIT;
-        } else {
-            CommsState = SLEEP;
-        }
-    }
-    else
-    {
-		// COMMSNotUs++;
-		memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
-        RadioLib_Standby();
-		CommsState = STANDBY;
-    }
-}
-
-void OnTxDone(void)
-{
-    // neteja de flags i variables
-    CommsFlags.txAck = 0;
-    CommsFlags.txPayload = 0;
-
-    RadioLib_Standby();
-    CommsState = SLEEP;
+   // if tx_queue is not empty -> change state to transmit, 
+   // else -> change state to sleep 
 }
 
 
-// COMMSRxErrors
-void OnRxError( void )
+void state_transmit(void)
 {
-    RadioLib_Standby();
-    CommsState = RECEIVE;
+    // TODO:
+    // Transmit once every packet in the tx_queue and change state to sleep when done. 
 }
 
-// COMMSRxTimeouts
-// ADCS_counter = 1;
-// TLE_counter = 1;
-void OnRxTimeout( void)
-{
-    CommsState = SLEEP;
-}
 
-void OnTxTimeout(void) 
-{
-    // neteja de flags i variables
-    CommsFlags.txAck = 0;
-    CommsFlags.txPayload = 0;
-
-    RadioLib_Standby();
-    CommsState = STANDBY;
-}
-
-void OnCadDone( int channelActivityDetected)
-{
-    if (channelActivityDetected == 1) {
-        CommsFlags.cadRx = 1;
-        CommsState = RECEIVE; // If channel activity is detected stay in RECEIVE state
-    }
-    else {
-        RadioLib_Standby();
-        CommsState = SLEEP;
-    }
-}
-
-void SX1262Config(uint8_t SF, uint8_t CR, uint32_t RF_F)
-{
-    /* Reads the SF, CR and time between packets variables from memory */
-    /* Configuration of the LoRa frequency and TX and RX parameters */
-    RadioLib_SetChannel(RF_F);
-    // estam ya lo hacemos en setup_comms
-    //RadioLib_SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH, SF, CR,
-    //                                LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-    //                                1, 0, 0, LORA_IQ_INVERSION_ON, 3000 );
-
-    //RadioLib_SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, SF, CR, 0, LORA_PREAMBLE_LENGTH,
-    //                                LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
-    //                                0, 1, 0, 0, LORA_IQ_INVERSION_ON, 1 );
-
-}
-
-// // need to implement RadioLoRaCadSymbols_t
-// void SX126xConfigureCad(RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout)
-// {   
-//     SX126xSetDioIrqParams( 	IRQ_CAD_DONE | IRQ_CAD_ACTIVITY_DETECTED, IRQ_CAD_DONE | IRQ_CAD_ACTIVITY_DETECTED,
-//                                     IRQ_RADIO_NONE, IRQ_RADIO_NONE );
-
-//     SX126xSetCadParams(cadSymbolNum, cadDetPeak, cadDetMin, LORA_CAD_RX, cadTimeout);
-//     //THE TOTAL CAD TIMEOUT CAN BE EQUAL TO RX TIMEOUT (IT SHALL NOT BE HIGHER THAN 4 SECONDS)
-// }
 
 //ack_m or OP?? simply name convention
 void TxPrepare(uint8_t messageType) {

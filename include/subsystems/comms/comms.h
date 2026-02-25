@@ -17,11 +17,10 @@
 /* ---- Type definitions ---- */
 
 typedef enum {
-        STARTUP,
-        TRANSMIT,
-        RECEIVE,
         SLEEP,
-        STANDBY,
+        PROCESS,
+        TRANSMIT,
+
 } CommsState_t;
 
 typedef struct {
