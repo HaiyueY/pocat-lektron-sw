@@ -4,6 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "comms.h"
+#include "tx_queue.h"
 #include "tc_handler.h"
 #include "radiolib_wrapper.h"
 #include "health.h"
@@ -33,8 +34,6 @@
 #define CAD_DET_MIN             1
 
 #define MODEM_LORA              1 // To-do: revise
-
-#define COMMS_PKT_SIZE 48
 
 
 /* ---- Module-level variables ---- */
@@ -86,7 +85,6 @@ void state_transmit(void);
 
 void comms_task(void *pv_parameters)
 {
-
     setup_comms();
 
     for(;;) 
@@ -220,21 +218,52 @@ void state_sleep(void)
 
 void state_process(void)
 {
-   // TODO:
-   // Process the received packet, 
+    if (CommsPackets.RxData[5] == ACK_M) {
+        /* Ground acknowledged our last downlink — remove the head of the TX queue */
+        txq_dequeue();
+    } else {
+        /* Telecommand received — dispatch it and enqueue an ACK if required */
+        int need_ack = tc_process(CommsPackets.RxData, &tc_handles);
+        if (need_ack) {
+            uint8_t ack_pkt[COMMS_PKT_SIZE] = {0};
+            uint32_t ts = 0; /* TODO: read from RTC */
+            ack_pkt[0] = (ts >> 24) & 0xFF;
+            ack_pkt[1] = (ts >> 16) & 0xFF;
+            ack_pkt[2] = (ts >>  8) & 0xFF;
+            ack_pkt[3] =  ts        & 0xFF;
+            ack_pkt[4] = 0;
+            ack_pkt[5] = ACK_M;
+            txq_enqueue(ack_pkt, COMMS_PKT_SIZE, 1);
+        }
+    }
 
-   // if telecommmand -> call tc_process (it shall enqueue ack)
-   // if ACK -> remove acknoleged packet from tx_queue
-
-   // if tx_queue is not empty -> change state to transmit, 
-   // else -> change state to sleep 
+    CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
 }
 
 
 void state_transmit(void)
 {
-    // TODO:
-    // Transmit once every packet in the tx_queue and change state to sleep when done. 
+    TxQueueEntry_t *entry = txq_peek();
+    if (entry == NULL) {
+        CommsState = SLEEP;
+        return;
+    }
+
+    entry->tries++;
+
+    /* Interleave a copy so the queued data stays intact for retransmission */
+    uint8_t tx_buf[COMMS_PKT_SIZE];
+    memcpy(tx_buf, entry->data, entry->length);
+    Interleave(tx_buf, entry->length);
+    RadioLib_Send(tx_buf, (uint16_t)entry->length);
+
+    if (entry->stop_and_wait) {
+        /* Leave the entry in the queue; wait for ACK in the next PROCESS cycle */
+        CommsState = SLEEP;
+    } else {
+        txq_dequeue();
+        CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
+    }
 }
 
 
