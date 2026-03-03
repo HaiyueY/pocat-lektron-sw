@@ -1,10 +1,25 @@
 #!/bin/bash
 
+# Usage: ./build.sh [--mock] [--clean]
+#   --mock   Build with the mock radio (no hardware required)
+#   --clean  Remove the build directory before building (force full rebuild)
+
+RADIO_MOCK=OFF
+CLEAN=0
+for arg in "$@"; do
+    case "$arg" in
+        --mock)  RADIO_MOCK=ON ;;
+        --clean) CLEAN=1 ;;
+    esac
+done
+
 # Let's build the project
-rm -rf build
-mkdir build
+if [ "$CLEAN" -eq 1 ]; then
+    rm -rf build
+fi
+mkdir -p build
 cd build
-cmake ..
+cmake .. -DRADIO_MOCK=$RADIO_MOCK
 make -j4    # 4 threads (Adjust to your number of cores)
 cd ..
 
