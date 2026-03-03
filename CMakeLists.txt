@@ -95,10 +95,14 @@ add_executable(${EXECUTABLE}
 )
 
 
+# Mock radio option (no hardware required: prints config and TX packets, RX always times out)
+option(RADIO_MOCK "Use mock radio implementation" OFF)
+
 # Embedded macros(defines)
 target_compile_definitions(${EXECUTABLE} PRIVATE
     ${MCU_MODEL}
     USE_HAL_DRIVER
+    $<$<BOOL:${RADIO_MOCK}>:RADIO_MOCK>
 )
 
 # Add header directories (AFTER add_executable !!)
