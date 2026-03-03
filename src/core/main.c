@@ -58,7 +58,8 @@ int main(void)
   MX_IWDG_Init();
   MX_USART2_UART_Init();
 
-  printf("pocat flight software\r\n");
+
+  printf("\r\n=======================\r\n pocat flight software\r\n=======================\r\n\r\n");
   
   BaseType_t result = xTaskCreate(obc_task, "OBC", OBC_STACK_SIZE, NULL, OBC_PRIORITY, &obc_task_handle);
     if (result != pdPASS) {

@@ -1,3 +1,5 @@
+#ifndef RADIO_MOCK
+
 #include "radiolib_wrapper.h"
 
 /* C++ headers */
@@ -222,3 +224,5 @@ extern "C" { // to stop name mangling
 
 
 }
+
+#endif /* RADIO_MOCK */
