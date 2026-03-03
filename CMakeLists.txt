@@ -69,7 +69,7 @@ file(GLOB_RECURSE STM32CUBEMX_SOURCES
 file(GLOB_RECURSE PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/Radiolib/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/RadioLib/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/subsystems/*/*.c
 )
 
