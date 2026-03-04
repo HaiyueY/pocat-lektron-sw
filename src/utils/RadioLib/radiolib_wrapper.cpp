@@ -1,19 +1,30 @@
 #ifndef RADIO_MOCK
-
 #include "radiolib_wrapper.h"
 
 /* C++ headers */
 #include <RadioLib.h>
 #include "stm32_radiolib_hal.h"
+#include <stdio.h>
 
 
 // Instantiate C++ outside of extern "C"
 static stm32RadioLibHal hal(&hspi2);  
 
-static Module mod(&hal, 1, 2, 3, 4); // TODO: change pins to actual ones (these are made up) NSS, DIO1, BUSY, RESET
-static SX1262 radio(&mod);
+// Pin encoding: (portIndex << 16) | GPIO_PIN_x
+// Port index: A=0, B=1, C=2, D=3, ...
 
-static RadioEvents_t* radioEventsPtr = nullptr;
+#define RADIO_PIN_NSS    ((1 << 16) | GPIO_PIN_12)  // PB12 - SX1262 Chip Select
+#define RADIO_PIN_DIO1   ((0 << 16) | GPIO_PIN_10)  // PA10 - SX1262 Interrupt (DIO1)
+#define RADIO_PIN_RESET  ((2 << 16) | GPIO_PIN_9)   // PC9  - SX1262 Reset
+#define RADIO_PIN_BUSY   ((0 << 16) | GPIO_PIN_8)   // PA8  - SX1262 Busy Indicator
+
+// Module constructor order: Module(hal, cs, irq, rst, gpio)
+//   cs   = NSS         (PB12)
+//   irq  = DIO1        (PA10)
+//   rst  = SX1262_NRST (PC9)
+//   gpio = BUSY        (PA8)
+static Module mod(&hal, RADIO_PIN_NSS, RADIO_PIN_DIO1, RADIO_PIN_RESET, RADIO_PIN_BUSY);
+static SX1262 radio(&mod);
 
 static float bwCodeToKHz(uint8_t bw_code) {
   switch(bw_code) {
@@ -26,17 +37,27 @@ static float bwCodeToKHz(uint8_t bw_code) {
 
 extern "C" { // to stop name mangling
 
-    void RadioLib_Init(RadioEvents_t *events) {
-        radioEventsPtr = events;
-        const int state = radio.begin(); //S'initzalitza la radio amb els valors per defecte: Freq = 434.0MHz, BW = 125kHz, SF = 9, CR = 4/7, SyncWord = private network, Power = 10dBm, PreambleLength = 8 symbols
+    int16_t RadioLib_Init(void) {
+        printf("RadioLib_Init: calling radio.begin()...\r\n");
+
+        // SX1262MB2xAS uses a crystal oscillator (XTAL), not a TCXO.
+        // Must set this BEFORE begin() so RadioLib skips DIO3 TCXO setup.
+        radio.XTAL = true;
+        const int16_t state = radio.begin(
+            434.0,  
+            125.0,  
+            9,      
+            7,       
+            RADIOLIB_SX126X_SYNC_WORD_PRIVATE,
+            10,     
+            8,      
+            0.0,     // tcxoVoltage = 0 (no TCXO on this board)
+            false   
+        );
         if(state != RADIOLIB_ERR_NONE) {
-            // Handle error (could add error callback or logging)
-            //printf("Error en la inicialitzacio de la radio: %d\n", state);
+            printf("Error initializing radio: %d\r\n", state);
         }
-        else{
-            // Successfully initialized
-            //printf("Radio inicialitzada correctament.\n");
-        }
+        return state;
     }
 
     void RadioLib_SetChannel(uint32_t freq_hz) {
@@ -134,59 +155,22 @@ extern "C" { // to stop name mangling
     }
 
 
-    int16_t RadioLib_Rx(uint32_t timeoutMs) {
-        //return radio.startReceive(timeoutMs); Aquesta es la manera de ferho no bloquejant
-        int st = radio.receive(nullptr, 0, timeoutMs); //Aquesta es la manera de ferho bloquejant
+    int16_t RadioLib_Receive(uint32_t timeoutMs,
+                        uint8_t *outBuf, uint16_t bufSize,
+                        uint16_t *outLen, int16_t *outRssi, int8_t *outSnr)
+    {
+        int16_t st = radio.receive(outBuf, bufSize, timeoutMs);
 
-        if(st == RADIOLIB_ERR_NONE) {
-            uint16_t len = radio.getPacketLength();
-            uint8_t buf[len];
-
-            int stData = radio.readData(buf, len);
-            if(stData == RADIOLIB_ERR_NONE) {
-                int16_t rssi = radio.getRSSI();
-                int8_t snr = radio.getSNR();
-                if(radioEventsPtr && radioEventsPtr->RxDone) {
-                    radioEventsPtr->RxDone(buf, len, rssi, snr);
-                }
-            } else {
-                if(radioEventsPtr && radioEventsPtr->RxError) {
-                    radioEventsPtr->RxError();
-                }
-            }
-
-        }
-        else if(st == RADIOLIB_ERR_RX_TIMEOUT) {
-            if(radioEventsPtr && radioEventsPtr->RxTimeout) {
-                radioEventsPtr->RxTimeout();
-            }
-        }
-        else if(st == RADIOLIB_ERR_CRC_MISMATCH) {
-            if(radioEventsPtr && radioEventsPtr->RxError) {
-                radioEventsPtr->RxError();
-            }
-        }
-        else{
-            // Hem de tractar la resta d'errors aqui
+        if (st == RADIOLIB_ERR_NONE) {
+            if (outLen)  *outLen  = radio.getPacketLength();
+            if (outRssi) *outRssi = radio.getRSSI();
+            if (outSnr)  *outSnr  = radio.getSNR();
         }
         return st;
     }
 
-    void RadioLib_Send(uint8_t *buf, uint16_t len) {
-        int st = radio.transmit(buf, len);
-        if(st == RADIOLIB_ERR_NONE) {
-            if(radioEventsPtr && radioEventsPtr->TxDone) {
-                radioEventsPtr->TxDone();
-            }
-        }
-        else if(st == RADIOLIB_ERR_TX_TIMEOUT) {
-            if(radioEventsPtr && radioEventsPtr->TxTimeout) {
-                radioEventsPtr->TxTimeout();
-            }
-        }
-        else{
-            // Hem de tractar la resta d'errors aqui
-        }
+    int16_t RadioLib_Transmit(uint8_t *buf, uint16_t len) {
+        return radio.transmit(buf, len);
     }
 
     int16_t RadioLib_Sleep(void) {
@@ -197,21 +181,62 @@ extern "C" { // to stop name mangling
         return radio.standby();
     }
 
-    int16_t RadioLib_StartCad(void) {  // Es fa servir per CAD real
-        int16_t st = radio.scanChannel();
+    int16_t RadioLib_ScanChannel(void) {
+        return radio.scanChannel();
+    }
 
-        int detected = 0;
-        if(st == RADIOLIB_LORA_DETECTED) {
-            detected = 1;
-        } else if(st == RADIOLIB_CHANNEL_FREE) {
-           detected = 0;
-        } else {
-           // La resta d'errors s'han de tractar aqui
+    // CAD + RX
+    int16_t RadioLib_CadReceive(uint32_t rxTimeoutMs,
+                           uint8_t *outBuf, uint16_t bufSize,
+                           uint16_t *outLen, int16_t *outRssi, int8_t *outSnr)
+    {
+        ChannelScanConfig_t cfg = {
+            .cad = {
+                .symNum = RADIOLIB_SX126X_CAD_PARAM_DEFAULT,
+                .detPeak = RADIOLIB_SX126X_CAD_PARAM_DEFAULT,
+                .detMin = RADIOLIB_SX126X_CAD_PARAM_DEFAULT,
+                .exitMode = RADIOLIB_SX126X_CAD_GOTO_RX,
+                .timeout = (RadioLibTime_t)rxTimeoutMs * 1000UL,
+                .irqFlags = RADIOLIB_IRQ_CAD_DEFAULT_FLAGS,
+                .irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK,
+            },
+        };
+
+        int16_t cadResult = radio.scanChannel(cfg);
+        if (cadResult != RADIOLIB_LORA_DETECTED) {
+            return cadResult;
+        }
+        bool softTimeout = false;
+        RadioLibTime_t start = hal.millis();
+        for (;;) {
+            uint32_t irq = radio.getIrqFlags();
+            if (irq & RADIOLIB_SX126X_IRQ_RX_DONE)   break;
+            if (irq & RADIOLIB_SX126X_IRQ_TIMEOUT)    { softTimeout = true; break; }
+            if (hal.millis() - start > rxTimeoutMs)    { softTimeout = true; break; }
+            hal.yield();
         }
 
-        if(radioEventsPtr && radioEventsPtr->CadDone) {
-            radioEventsPtr->CadDone(detected);
+        // receive should not be called here, but following radiolibs implementation of receive: 
+        int16_t state = radio.standby();
+        if ((state != RADIOLIB_ERR_NONE) && (state != RADIOLIB_ERR_SPI_CMD_TIMEOUT)) {
+            return state;
         }
+
+        if (softTimeout || (radio.getIrqFlags() & RADIOLIB_SX126X_IRQ_TIMEOUT)) {
+            (void)radio.finishReceive();
+            return RADIOLIB_ERR_RX_TIMEOUT;
+        }
+
+        size_t pktLen = radio.getPacketLength();
+        if (pktLen > bufSize) pktLen = bufSize;
+
+        int16_t st = radio.readData(outBuf, pktLen);
+        if (st == RADIOLIB_ERR_NONE) {
+            if (outLen)  *outLen  = (uint16_t)pktLen;
+            if (outRssi) *outRssi = (int16_t)radio.getRSSI();
+            if (outSnr)  *outSnr  = (int8_t)radio.getSNR();
+        }
+
         return st;
     }
 
@@ -220,9 +245,5 @@ extern "C" { // to stop name mangling
         // No obstant, si ens posem en un mode no bloquejant, potser caldra implementar alguna cosa aqui.
     }
 
-
-
-
 }
-
 #endif /* RADIO_MOCK */

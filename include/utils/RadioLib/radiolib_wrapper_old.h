@@ -1,3 +1,4 @@
+#if 0
 /**
  * @file radiolib_wrapper.h
  * @author Jan Pruneda Marcet
@@ -12,17 +13,41 @@
 #define INC_WRAPPER_H
 
 #include <stdint.h>
-#include "TypeDef.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/** @brief Callback struct for radio events. Assign your C functions before calling RadioLib_Init(). */
+typedef struct {
+    /** @brief Transmission finished */
+    void (*TxDone)(void);
+    /**
+     * @brief Reception finished.
+     * @param payload Received data buffer.
+     * @param size Length in bytes.
+     * @param rssi Received signal strength (dBm).
+     * @param snr  Signal-to-noise ratio (dB).
+     */
+    void (*RxDone)(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
+    /** @brief Transmission timeout */
+    void (*TxTimeout)(void);
+    /** @brief Reception timeout */
+    void (*RxTimeout)(void);
+    /** @brief Reception error (e.g. CRC) */
+    void (*RxError)(void);
+    /**
+     * @brief Channel Activity Detection (CAD) finished.
+     * @param channelActivityDetected 0 = channel free (safe to transmit), non-zero = LoRa activity detected (channel busy).
+     */
+    void (*CadDone)(int channelActivityDetected);
+} RadioEvents_t;
+
 /**
- * @brief Initialise the radio hardware.
- * @returns 0 on success, negative RadioLib error code on failure.
+ * @brief Initialise the radio and assign the callbacks.
+ * @param events Pointer to RadioEvents_t with your callback functions (can be NULL for unused).
  */
-int16_t RadioLib_Init(void);
+void RadioLib_Init(RadioEvents_t *events);
 
 /**
  * @brief Set the frequency.
@@ -67,26 +92,18 @@ void RadioLib_SetRxConfig(
     uint16_t preambleLen);
 
 /**
- * @brief Send data (blocking).
+ * @brief Send the data.
  * @param buf Pointer to the data to transmit.
  * @param len Length in bytes.
- * @return 0 on success, negative RadioLib error code on failure.
  */
-int16_t RadioLib_Transmit(uint8_t *buf, uint16_t len);
+void RadioLib_Send(uint8_t *buf, uint16_t len);
 
 /**
- * @brief Receive a packet (blocking).
- * @param timeoutMs  Timeout in milliseconds; 0 = wait forever.
- * @param outBuf     Buffer to write received data into.
- * @param bufSize    Size of outBuf.
- * @param outLen     [out] Actual number of bytes received (may be NULL).
- * @param outRssi    [out] RSSI in dBm (may be NULL).
- * @param outSnr     [out] SNR in dB (may be NULL).
- * @return 0 on success, negative RadioLib error code on failure.
+ * @brief Enter receive mode and wait for a packet.
+ * @param timeoutMs Timeout in milliseconds; 0 = wait forever.
+ * @return RadioLib error code (e.g. RADIOLIB_ERR_NONE on success).
  */
-int16_t RadioLib_Receive(uint32_t timeoutMs,
-                    uint8_t *outBuf, uint16_t bufSize,
-                    uint16_t *outLen, int16_t *outRssi, int8_t *outSnr);
+int16_t RadioLib_Rx(uint32_t timeoutMs);
 
 /** @brief Enter sleep mode */
 int16_t RadioLib_Sleep(void);
@@ -94,33 +111,10 @@ int16_t RadioLib_Sleep(void);
 /** @brief Enter standby mode */
 int16_t RadioLib_Standby(void);
 
-/**
- * @brief Perform blocking channel-activity detection.
- * @return RADIOLIB_LORA_DETECTED if activity found,
- *         RADIOLIB_CHANNEL_FREE  if channel is clear,
- *         or negative error code on failure.
- */
-int16_t RadioLib_ScanChannel(void);
-
-/**
- * @brief CAD scan followed by automatic RX in hardware (CAD→RX mode).
- *
- * Uses the SX1262's CAD_GOTO_RX exit mode so that the radio transitions from CAD
- * to RX without any software gaps (which has caused problems...).
- *
- * @param rxTimeoutMs  Maximum time (ms) to wait for a packet after CAD triggers.
- * @param outBuf       Buffer to write received data into.
- * @param bufSize      Size of outBuf.
- * @param outLen       [out] Actual number of bytes received (may be NULL).
- * @param outRssi      [out] RSSI in dBm (may be NULL).
- * @param outSnr       [out] SNR in dB (may be NULL).
- * @return 0 on success,
- *         RADIOLIB_CHANNEL_FREE if no activity detected,
- *         or negative RadioLib error code on failure.
- */
-int16_t RadioLib_CadReceive(uint32_t rxTimeoutMs,
-                       uint8_t *outBuf, uint16_t bufSize,
-                       uint16_t *outLen, int16_t *outRssi, int8_t *outSnr);
+/** @brief Start channel detection. 
+  * @todo Do we really need this function?
+*/
+int16_t RadioLib_StartCad(void);
 
 /** @brief Process radio interrupts. 
  * @note No-op function. RadioLib already handles it but it kept so that call sites need no changes. */
@@ -131,3 +125,4 @@ void RadioLib_IrqProcess(void);
 #endif
 
 #endif /* INC_WRAPPER_H */
+#endif
