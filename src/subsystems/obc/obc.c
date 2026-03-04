@@ -84,8 +84,14 @@ static void setup_obc(void) {
 
     printf("Setting up OBC...\r\n");
     // 1. Create queues
-    // create_queues();  // TODO: implement this function
+    // create_queues();  // TODO: implement this function (small version)
+    obdh_queue_handle = xQueueCreate(OBDH_QUEUE_LEN, OBDH_ITEM_SIZE);
 
+    if (obdh_queue_handle == NULL) {
+        printf("ERROR: Could not create OBDH Queue\n");
+        // This has to be implemented
+        while(1); 
+    }
     // 2. Create tasks
     BaseType_t ok = create_payload_task();
     if (ok != pdPASS)

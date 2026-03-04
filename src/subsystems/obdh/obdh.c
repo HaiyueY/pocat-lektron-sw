@@ -1,6 +1,6 @@
 /**
  * @file obdh.c
- * @author your name (you@domain.com)
+ * @author Medir Segura medir.segura@estudiantat.upc.edu
  * @brief oversees the management of internal data within the spacecraft. Its primary focus includes 
     housekeeping data, scientific data, and configurations, as well as managing access to flash 
     memory. (primary focus now is saving and retrieving data from flash)
@@ -16,7 +16,11 @@
 #include "obdh.h"
 #include <stdio.h>
 #include "health.h"
-
+#include <stdint.h>
+#include <string.h>
+#include "main.h"
+#include "queue.h"
+#include "flash.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -26,7 +30,7 @@
 
 /* ---- Module-level variables ---- */
 // ..
-
+QueueHandle_t obdh_queue_handle;
 /* ---- Private function prototypes ---- */
 void setup_obdh(void);
 void process_obdh(void);
@@ -40,9 +44,10 @@ void obdh_task(void *pv_parameters) {
 
     for (;;) {
         process_obdh();
+        //I don't know if lines 48 and 49 are necessary
         health_kick(HEALTH_BIT_OBDH);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        //printf("OBDH loop\r\n");
+        
     }
 
 }
@@ -56,24 +61,61 @@ void setup_obdh(void) {
     // Apply the default configuration
 
 }
-
+/**
+ * @brief This process waits for an element of the queue to be recived,
+ * a request. The request can be to read flash or to write flash.
+ * When operations are done, then a notification(with flags) is
+ * given to the OBC with an event. 
+ * 
+ * 
+ */
 void process_obdh(void) {
+    obdh_request request;
+    HAL_StatusTypeDef status=HAL_OK;
+    printf("Processing OBDH...\n");
 
-    // printf("Processing OBDH...\n");
 
-    // Gestión de la flash:
-    // Leemos datos de la cola de la tarea (donde habran peticiones de read o write de otras tareas
-    // que quieran acceder a la memoria flash)
-    // La información de cada elemento en la cola será el siguiente struct:
-    //  *   - op      : FLASH_READ o FLASH_WRITE
-    //  *   - addr    : dirección en flash
-    //  *   - len     : número de bytes
-    //  *   - buf     : puntero al buffer (src en WRITE, dst en READ)
-    //  *   - client  : TaskHandle_t de la tarea solicitante (para notificación de fin)
-    // A partir de esto si es FLASH_READ leemos la flash y ponemos la info en buf, si es FLASH_WRITE 
-    // escribimos la info de buf en la flash
-    // Si es FLASH_READ notificamos a la tarea solicitante que la información esta disponible en la 
-    // posición que nos ha pasado con buf (aquí suponemos que la tarea solicitante sabe cuanto ocupa la
-    // información que pide de flash).
+    if (xQueueReceive(obdh_queue_handle,&request,portMAX_DELAY)== pdPASS)
+    {
+        if(request.op==FLASH_READ)
+        {
+            
+            
+            if(request.buf!=NULL)
+            {
+                Read_Flash(request.addr, request.buf,
+		request.len);
+               
+            }
+            status=HAL_OK;
+        }
+        else if(request.op == FLASH_WRITE)
+        {
+            if(request.buf != NULL)
+            {
+                Write_Flash(request.addr, request.buf, request.len);
+                status=HAL_OK;
+
+               
+            }
+            else
+            {
+                status=HAL_ERROR;
+
+            }
+        }
+
+        if (request.res != NULL)
+        {
+            *(request.res)=status;
+        }
+        if (request.client!=NULL)
+        {
+            xTaskNotify(request.client,OBC_EVENT_OBDH_DONE,eSetBits);
+        }
+        
+    }
+
+    
 
 }
