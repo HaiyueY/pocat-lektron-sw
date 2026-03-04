@@ -44,9 +44,6 @@ static CommsState_t CommsState = SLEEP;
 // Task handles for telecommand notification targets (populated during init)
 static tc_task_handles_t tc_handles = {0}; 
 
-// Radio event handler struct
-static RadioEvents_t RadioEvents;
-
 static CommsPackets_t CommsPackets = {
     .packetWindow = 5
 };
@@ -115,22 +112,23 @@ void setup_comms(void)
     
     RadioLib_SetChannel(CommsSettings.RF_F); // Configures the transceiver
 
-    RadioLib_SetTxConfig( // Configura els parametres de TX
-        11,                     // SF
-        1,                      // CR
-        TX_OUTPUT_POWER,        // Potencia de transmissio
-        LORA_BANDWIDTH,         // BW
-        LORA_IQ_INVERSION_ON,   // IQ
-        1,                   // CRC ON
-        LORA_PREAMBLE_LENGTH);  // Sequencia la sincronitzacio
+    // SF=8, CR=1 to match the CubeCell ground station
+    RadioLib_SetTxConfig(
+        8,                      // SF
+        1,                      // CR  4/5
+        TX_OUTPUT_POWER,        // Potència de transmissió
+        LORA_BANDWIDTH,         // BW  125 kHz
+        LORA_IQ_INVERSION,     // IQ inversion off
+        1,                      // CRC on
+        LORA_PREAMBLE_LENGTH);  // Preamble 8
 
-    RadioLib_SetRxConfig( // Configura els parametres de RX
-        11,                     // SF
-        1,                      // CR
-        LORA_BANDWIDTH,         // BW
-        LORA_IQ_INVERSION_ON,   // IQ
-        1,                   // CRC ON
-        LORA_PREAMBLE_LENGTH) ; // Sequencia la sincronitzacio
+    RadioLib_SetRxConfig(
+        8,                      // SF 
+        1,                      // CR  4/5
+        LORA_BANDWIDTH,         // BW  125 kHz
+        LORA_IQ_INVERSION,     // IQ inversion off
+        1,                      // CRC on
+        LORA_PREAMBLE_LENGTH);  // Preamble 8
 
     CommsState = SLEEP; // Start in sleep state
 
@@ -161,8 +159,6 @@ void process_comms(void)
 
 void state_sleep(void) 
 {   
-    RadioLib_Sleep();
-    vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
 
     // TODO:
     // Receive in CAD mode blocking until timeout or reception, 
