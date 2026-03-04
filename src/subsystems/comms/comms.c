@@ -108,7 +108,10 @@ void setup_comms(void)
     // RadioEvents.RxError = OnRxError;
     // RadioEvents.CadDone = OnCadDone;
 
-    RadioLib_Init(&RadioEvents);  // Initializes the Radio with radiolib
+    if (RadioLib_Init() != 0) {
+        printf("COMMS: Radio init failed, aborting setup\r\n");
+        return;
+    }
     
     RadioLib_SetChannel(CommsSettings.RF_F); // Configures the transceiver
 
