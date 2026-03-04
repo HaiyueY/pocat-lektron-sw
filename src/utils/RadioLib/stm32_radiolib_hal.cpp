@@ -7,6 +7,7 @@
  */
 
 #include "stm32_radiolib_hal.h"
+#include <string.h>
 
 // ============================================================================
 // Global/Static Definitions
@@ -284,20 +285,44 @@ void stm32RadioLibHal::spiBegin() {}
 /* No need to for beginning transaction in stm32. Just use the spi handle!*/
 void stm32RadioLibHal::spiBeginTransaction() {}
 
-/** @todo Protect SPI1 with a mutex/semaphore if multiple tasks may access it concurrently. */
+/**
+ * @brief SPI full-duplex transfer using direct 8-bit register access.
+ *
+ * HAL_SPI_TransmitReceive uses 16-bit data-packing for transfers > 1 byte,
+ * switching the FRXTH threshold mid-transfer for odd lengths.  This causes
+ * an intermittent FIFO race condition that corrupts received data — no
+ * combination of pre/post flushing reliably prevents it.
+ *
+ * This implementation keeps FRXTH = 1 permanently and accesses DR as
+ * uint8_t, clocking one byte at a time.  Deterministic and reliable.
+ *
+ * @todo Protect SPI with a mutex/semaphore if multiple tasks access it.
+ */
 void stm32RadioLibHal::spiTransfer(uint8_t* out, size_t len, uint8_t* in)
 {
     configASSERT(!xPortIsInsideInterrupt());
-
     if (len == 0) return;
-    
-    static uint8_t auxTx = 0x00;
-    static uint8_t auxRx;
 
-    uint8_t* tx = out ? out : &auxTx;
-    uint8_t* rx = in  ? in  : &auxRx;
+    SPI_TypeDef* spi = _spi->Instance;
 
-    HAL_SPI_TransmitReceive(_spi, tx, rx, len, HAL_MAX_DELAY); // To-do: timeout value?
+    // Force 8-bit RX FIFO threshold so RXNE fires after every single byte
+    spi->CR2 |= SPI_RXFIFO_THRESHOLD;
+
+    // Enable SPI if not already on
+    if (!(spi->CR1 & SPI_CR1_SPE)) {
+        spi->CR1 |= SPI_CR1_SPE;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        while (!(spi->SR & SPI_SR_TXE)) {}
+        *(__IO uint8_t *)&spi->DR = out ? out[i] : 0x00;
+
+        while (!(spi->SR & SPI_SR_RXNE)) {}
+        uint8_t rx = *(__IO uint8_t *)&spi->DR;
+        if (in) in[i] = rx;
+    }
+
+    while (spi->SR & SPI_SR_BSY) {}
 }
 
 /*  No need to for ending spi transaction in stm32. */
