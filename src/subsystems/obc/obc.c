@@ -82,7 +82,6 @@ void obc_task(void *pv_parameters) {
 
 static void setup_obc(void) {
 
-    printf("Setting up OBC...\r\n");
     // 1. Create queues
     // create_queues();  // TODO: implement this function
 

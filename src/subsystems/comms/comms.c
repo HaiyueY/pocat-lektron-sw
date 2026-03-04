@@ -22,7 +22,7 @@
 #define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
 #define LORA_SYMBOL_TIMEOUT                 100       // Symbols
 #define LORA_FIX_LENGTH_PAYLOAD_ON          0
-#define LORA_IQ_INVERSION_ON                0
+#define LORA_IQ_INVERSION                   0         // 0 = off, 1 = on
 
 //     Transmit message types 
 #define ACK_M     							2
@@ -89,7 +89,6 @@ void comms_task(void *pv_parameters)
         process_comms();
         health_kick(HEALTH_BIT_COMMS);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        //printf("COMMS loop\r\n");
 
     }
 }
@@ -143,6 +142,7 @@ void process_comms(void)
     // if N_COMMS_RESUME_RF         Resume RF transmission
     // if N_COMMS_TRANSMIT_BEACON   Transmit the beacon
 
+    printf("Processing COMMS state machine, current state: %d\r\n", CommsState);
     switch(CommsState)
     {   
         case SLEEP:
@@ -157,8 +157,27 @@ void process_comms(void)
 }
 
 
-void state_sleep(void) 
-{   
+void state_sleep(void)
+{
+    // Implemented simple receiving mechanism for now...
+    uint16_t rx_len  = 0;
+    int16_t  rx_rssi = 0;
+    int8_t   rx_snr  = 0;
+
+    int16_t ret = RadioLib_Receive(CommsSettings.rxTime,
+                                   CommsPackets.RxData, COMMS_PKT_SIZE,
+                                   &rx_len, &rx_rssi, &rx_snr);
+
+    if (ret != 0) { return; } /* Timeout or radio error — stay in SLEEP */
+
+    Deinterleave(CommsPackets.RxData, (int)rx_len);
+
+    /* TODO: Validate that the packet is ours and is correct */
+    
+    CommsState = PROCESS;
+
+    //RadioLib_Sleep();
+    //vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
 
     // TODO:
     // Receive in CAD mode blocking until timeout or reception, 
@@ -217,19 +236,20 @@ void state_sleep(void)
 
 void state_process(void)
 {
+
     if (CommsPackets.RxData[5] == ACK_M) {
         /* Ground acknowledged our last downlink — remove the head of the TX queue */
         txq_dequeue();
     } else {
         /* Telecommand received — dispatch it and enqueue an ACK if required */
+        uint8_t tc_id = CommsPackets.RxData[2]; /* save before tc_process may clear RxData */
         int need_ack = tc_process(CommsPackets.RxData, &tc_handles);
         if (need_ack) {
             uint8_t ack_pkt[COMMS_PKT_SIZE] = {0};
-            uint32_t ts = 0; /* TODO: read from RTC */
-            ack_pkt[0] = (ts >> 24) & 0xFF;
-            ack_pkt[1] = (ts >> 16) & 0xFF;
-            ack_pkt[2] = (ts >>  8) & 0xFF;
-            ack_pkt[3] =  ts        & 0xFF;
+            ack_pkt[0] = 0xC8;   // header required by GS OnRxDone 
+            ack_pkt[1] = 0x9D;   // header required by GS OnRxDone 
+            ack_pkt[2] = tc_id;  // TC id so that GS knows what is being ACKed
+            ack_pkt[3] = 0;
             ack_pkt[4] = 0;
             ack_pkt[5] = ACK_M;
             txq_enqueue(ack_pkt, COMMS_PKT_SIZE, 1);
@@ -254,7 +274,7 @@ void state_transmit(void)
     uint8_t tx_buf[COMMS_PKT_SIZE];
     memcpy(tx_buf, entry->data, entry->length);
     Interleave(tx_buf, entry->length);
-    RadioLib_Send(tx_buf, (uint16_t)entry->length);
+    RadioLib_Transmit(tx_buf, (uint16_t)entry->length);
 
     if (entry->stop_and_wait) {
         /* Leave the entry in the queue; wait for ACK in the next PROCESS cycle */
