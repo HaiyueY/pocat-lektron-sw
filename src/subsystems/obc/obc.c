@@ -23,7 +23,12 @@
 #include "payload.h"
 #include "health.h"
 #include "log.h"    
+#include "flash.h"
 
+/* ---- Macros and constants ---- */
+//Variables que vaig fer servir per a la simulació, no verificats
+#define OBDH_QUEUE_LEN 10
+#define OBDH_ITEM_SIZE sizeof(obdh_request)
 
 /* ---- Type definitions ---- */
 typedef enum {
