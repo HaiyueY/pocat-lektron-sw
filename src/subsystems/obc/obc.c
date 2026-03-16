@@ -21,6 +21,7 @@
 #include "comms.h"
 #include "obdh.h"
 #include "payload.h"
+#include "adcs.h"
 #include "health.h"
 #include "log.h"    
 
@@ -35,6 +36,7 @@ static TaskHandle_t payload_task_handle;
 static TaskHandle_t eps_task_handle;
 static TaskHandle_t comms_task_handle;
 static TaskHandle_t obdh_task_handle;
+static TaskHandle_t adcs_task_handle;
 
 
 /* ---- Private function prototypes ---- */
@@ -51,11 +53,13 @@ static BaseType_t create_payload_task(void);
 static BaseType_t create_eps_task(void);
 static BaseType_t create_comms_task(void);
 static BaseType_t create_obdh_task(void);
+static BaseType_t create_adcs_task(void);
 
 void reset_payload_task(void);
 void reset_eps_task(void);
 void reset_comms_task(void);
 void reset_obdh_task(void);
+void reset_adcs_task(void);
 
 // a considerar/eliminar:
 static ObcState_t currentState;
@@ -107,10 +111,16 @@ static void setup_obc(void) {
     {
         printf("Error creating obdh task\r\n");
     }
+    ok = create_adcs_task();
+    if (ok != pdPASS)
+    {
+        printf("Error creating adcs task\r\n");
+    }
     health_init();
     health_register_iwdg(&hiwdg);
     health_set_expected(HEALTH_BIT_PAYLOAD | HEALTH_BIT_OBDH |
-                        HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
+                        HEALTH_BIT_EPS | HEALTH_BIT_COMMS |
+                        HEALTH_BIT_ADCS);
     health_config(pdMS_TO_TICKS(5000));
 }
 
@@ -211,6 +221,10 @@ static void handle_health_faults(EventBits_t faults)
         reset_obdh_task();
         printf("OBDH task reset due to health check\r\n");
     }
+    if (faults & HEALTH_BIT_ADCS) {
+        reset_adcs_task();
+        printf("ADCS task reset due to health check\r\n");
+    }
 }
 
 
@@ -232,6 +246,11 @@ static BaseType_t create_comms_task(void)
 static BaseType_t create_obdh_task(void)
 {
     return xTaskCreate(obdh_task, "OBDH", OBDH_STACK_SIZE, NULL, OBDH_PRIORITY, &obdh_task_handle);
+}
+
+static BaseType_t create_adcs_task(void)
+{
+    return xTaskCreate(adcs_task, "ADCS", ADCS_STACK_SIZE, NULL, ADCS_PRIORITY, &adcs_task_handle);
 }
 
 void reset_payload_task(void)
@@ -310,6 +329,26 @@ void reset_obdh_task(void)
 
     BaseType_t ok = create_obdh_task();
 
+    if (ok != pdPASS)
+    {
+        // error
+    }
+}
+
+void reset_adcs_task(void)
+{
+    if (adcs_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(adcs_task_handle);
+    vTaskDelete(adcs_task_handle);
+    adcs_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_adcs_task();
     if (ok != pdPASS)
     {
         // error
