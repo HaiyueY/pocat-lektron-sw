@@ -18,7 +18,7 @@
  *     L192-214:  Gyroscope readout for threshold check
  *
  *   ref/PoCat-Lektron-ADCS/ADCS/SimParameters/Sim_data_structure.m
- *     d.maxmoment = [32.0, 36.2, 32.0] × 10⁻⁴ A·m²
+ *     d.maxmoment = [17.01, 9.17, 17.01] × 10⁻⁴ A·m²  (from coil geometry)
  *
  * The sign-based law (rather than proportional k*dB/dt) is used because
  * it always commands the maximum available torque, which speeds up
