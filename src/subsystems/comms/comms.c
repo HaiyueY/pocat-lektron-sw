@@ -88,8 +88,6 @@ void comms_task(void *pv_parameters)
     {
         process_comms();
         health_kick(HEALTH_BIT_COMMS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-
     }
 }
 
@@ -142,7 +140,6 @@ void process_comms(void)
     // if N_COMMS_RESUME_RF         Resume RF transmission
     // if N_COMMS_TRANSMIT_BEACON   Transmit the beacon
 
-    printf("Processing COMMS state machine, current state: %d\r\n", CommsState);
     switch(CommsState)
     {   
         case SLEEP:
@@ -241,7 +238,7 @@ void state_process(void)
         /* Ground acknowledged our last downlink — remove the head of the TX queue */
         txq_dequeue();
     } else {
-        /* Telecommand received — dispatch it and enqueue an ACK if required */
+        /* Telecommand received — dispatch it */
         uint8_t tc_id = CommsPackets.RxData[2]; /* save before tc_process may clear RxData */
         int need_ack = tc_process(CommsPackets.RxData, &tc_handles);
         if (need_ack) {
@@ -252,7 +249,7 @@ void state_process(void)
             ack_pkt[3] = 0;
             ack_pkt[4] = 0;
             ack_pkt[5] = ACK_M;
-            txq_enqueue(ack_pkt, COMMS_PKT_SIZE, 1);
+            txq_enqueue(ack_pkt, COMMS_PKT_SIZE, 0, 1);
         }
     }
 
@@ -276,7 +273,11 @@ void state_transmit(void)
     Interleave(tx_buf, entry->length);
     RadioLib_Transmit(tx_buf, (uint16_t)entry->length);
 
-    if (entry->stop_and_wait) {
+    if (entry->is_ack) {
+        /* ACKs are fire-and-forget — dequeue immediately, no GS acknowledgement expected */
+        txq_dequeue();
+        CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
+    } else if (entry->stop_and_wait) {
         /* Leave the entry in the queue; wait for ACK in the next PROCESS cycle */
         CommsState = SLEEP;
     } else {

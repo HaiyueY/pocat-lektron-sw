@@ -22,6 +22,7 @@ typedef struct {
     uint8_t length;               /**< Packet length in bytes. */
     uint8_t tries;                /**< Number of transmission attempts so far. */
     uint8_t stop_and_wait;        /**< If 1, send only this packet then wait for ACK. */
+    uint8_t is_ack;              /**< If 1, this packet is an ACK, it should be handled accordingly. */
 } TxQueueEntry_t;
 
 /**
@@ -29,9 +30,10 @@ typedef struct {
  * @param data          Pointer to packet bytes to copy in.
  * @param length        Length of the packet in bytes (must be <= COMMS_PKT_SIZE).
  * @param stop_and_wait Set to 1 if the transmit state should pause after this entry.
+ * @param is_ack        Set to 1 if this packet is an ACK (fire-and-forget, no retransmission).
  * @return 0 on success, -1 if the queue is full.
  */
-int txq_enqueue(const uint8_t *data, uint8_t length, uint8_t stop_and_wait);
+int txq_enqueue(const uint8_t *data, uint8_t length, uint8_t stop_and_wait, uint8_t is_ack);
 
 /**
  * @brief Return a pointer to the head entry without removing it.
