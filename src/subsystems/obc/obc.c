@@ -23,7 +23,12 @@
 #include "payload.h"
 #include "health.h"
 #include "log.h"    
+#include "flash.h"
 
+/* ---- Macros and constants ---- */
+//Variables que vaig fer servir per a la simulació, no verificats
+#define OBDH_QUEUE_LEN 10
+#define OBDH_ITEM_SIZE sizeof(obdh_request)
 
 /* ---- Type definitions ---- */
 typedef enum {
@@ -83,8 +88,14 @@ void obc_task(void *pv_parameters) {
 static void setup_obc(void) {
 
     // 1. Create queues
-    // create_queues();  // TODO: implement this function
+    // create_queues();  // TODO: implement this function (small version)
+    obdh_queue_handle = xQueueCreate(OBDH_QUEUE_LEN, OBDH_ITEM_SIZE);
 
+    if (obdh_queue_handle == NULL) {
+        printf("ERROR: Could not create OBDH Queue\n");
+        // This has to be implemented
+        while(1); 
+    }
     // 2. Create tasks
     BaseType_t ok = create_payload_task();
     if (ok != pdPASS)
