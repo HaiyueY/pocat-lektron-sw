@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 /* ── General Task Notifications ─────────────────────────────────────────── */
-#define N_OPERATION_COMPLETE         (1u << 31)  /**< Flash operation completed (success or failure) */
+#define N_FLASH_OPERATION_COMPLETE         (1u << 31)  /**< Flash operation completed (success or failure) */
 
 /* ── ADCS Task Notifications ────────────────────────────────────────────── */
 
