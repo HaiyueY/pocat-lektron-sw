@@ -132,6 +132,8 @@ static void process_obc(ObcState_t *currentState) {
 
     suspend_and_resume_tasks_depending_on_state(currentState);
 
+    vTaskDelay(pdMS_TO_TICKS(100)); // Delay to prevent busy looping, adjust as needed
+
 }
 
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState) {

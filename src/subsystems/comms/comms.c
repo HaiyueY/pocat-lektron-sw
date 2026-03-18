@@ -12,6 +12,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "interleaving.h"
+#include "beacon.h"
+#include "notifications.h"
 
 
 /* ---- Macros and constants ---- */
@@ -127,16 +129,25 @@ void setup_comms(void)
 
     CommsState = SLEEP; // Start in sleep state
 
+    //beacon_init();
 }
 
 void process_comms(void)
 {
-    // TODO: Notifications    
+    // TODO: Notifications
     // if N_COMMS_NEW_CONFIG        New comms configuration available in memory
     // if N_COMMS_NEW_PARAMS        New parameter set available in memory
     // if N_COMMS_STOP_RF           Stop RF transmission
     // if N_COMMS_RESUME_RF         Resume RF transmission
-    // if N_COMMS_TRANSMIT_BEACON   Transmit the beacon
+
+    uint32_t notif = 0;
+    xTaskNotifyWait(0, N_COMMS_TRANSMIT_BEACON, &notif, 0);
+
+    if (notif & N_COMMS_TRANSMIT_BEACON) {
+        uint8_t beacon_pkt[COMMS_PKT_SIZE];
+        memset(beacon_pkt, 0xFF, sizeof(beacon_pkt));
+        txq_enqueue(beacon_pkt, COMMS_PKT_SIZE, 0, 0);
+    }
 
     switch(CommsState)
     {   
