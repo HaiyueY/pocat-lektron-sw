@@ -21,6 +21,7 @@
 #include "main.h"
 #include "queue.h"
 #include "flash.h"
+#include "notifications.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -43,10 +44,8 @@ void obdh_task(void *pv_parameters) {
     setup_obdh();
 
     for (;;) {
-        process_obdh();
-        //I don't know if lines 48 and 49 are necessary
+        process_obdh(); // Blocks for 1 second, waiting for requests from the OBC task. If a request is received, it processes it and notifies the OBC task when done.
         health_kick(HEALTH_BIT_OBDH);
-        vTaskDelay(pdMS_TO_TICKS(1000));
         
     }
 
@@ -66,26 +65,20 @@ void setup_obdh(void) {
  * a request. The request can be to read flash or to write flash.
  * When operations are done, then a notification(with flags) is
  * given to the OBC with an event. 
- * 
- * 
  */
 void process_obdh(void) {
     obdh_request request;
     HAL_StatusTypeDef status=HAL_OK;
     printf("Processing OBDH...\n");
 
-
-    if (xQueueReceive(obdh_queue_handle,&request,portMAX_DELAY)== pdPASS)
+    BaseType_t result_queue= xQueueReceive(obdh_queue_handle,&request,pdMS_TO_TICKS(1000));
+    if (result_queue== pdPASS)
     {
         if(request.op==FLASH_READ)
         {
-            
-            
             if(request.buf!=NULL)
             {
-                Read_Flash(request.addr, request.buf,
-		request.len);
-               
+                Read_Flash(request.addr, request.buf, request.len);
             }
             status=HAL_OK;
         }
@@ -95,13 +88,10 @@ void process_obdh(void) {
             {
                 Write_Flash(request.addr, request.buf, request.len);
                 status=HAL_OK;
-
-               
             }
             else
             {
                 status=HAL_ERROR;
-
             }
         }
 
@@ -111,11 +101,8 @@ void process_obdh(void) {
         }
         if (request.client!=NULL)
         {
-            xTaskNotify(request.client,OBC_EVENT_OBDH_DONE,eSetBits);
+            xTaskNotify(request.client,N_FLASH_OPERATION_COMPLETE,eSetBits);
         }
         
     }
-
-    
-
 }

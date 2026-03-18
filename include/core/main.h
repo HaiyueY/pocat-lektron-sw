@@ -15,14 +15,7 @@
 #include "task.h"
 #include "log.h"
 #include "periph.h"
-/**
- * @brief diferent flag events for comunication
- * 
- */
-#define OBC_EVENT_OBDH_DONE (1UL << 0) //Bit 0, obdh ha acabat
-#define OBC_EVENT_PAYLOAD_Experiments (1UL<<1)//Bit 1, enviem dades experiment
-#define OBC_EVENT_EPS_Measurements (1UL<<2) //Bit 2, enviem mesures EPS
-#define OBC_PHOTO_CAPTURE (1UL << 3) // bit 4
+
 
 /** @brief MSP post-initialization callback for TIM peripheral GPIO configuration. */
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);

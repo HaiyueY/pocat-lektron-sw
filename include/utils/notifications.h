@@ -14,6 +14,9 @@
 
 #include <stdint.h>
 
+/* ── General Task Notifications ─────────────────────────────────────────── */
+#define N_OPERATION_COMPLETE         (1u << 31)  /**< Flash operation completed (success or failure) */
+
 /* ── ADCS Task Notifications ────────────────────────────────────────────── */
 
 #define N_ADCS_DESIRED_STATE_IDLE        (1u << 0)  /**< Set ADCS state to IDLE */
