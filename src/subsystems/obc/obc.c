@@ -14,6 +14,7 @@
 /* ---- Includes ---- */
 #include <stdint.h> //mirar
 #include "obc.h"
+#include "state_machine.h"
 #include "FreeRTOS.h" // mirar
 #include "task.h" // mirar
 #include "main.h"
@@ -30,11 +31,6 @@
 #define OBDH_QUEUE_LEN 10
 #define OBDH_ITEM_SIZE sizeof(obdh_request)
 
-/* ---- Type definitions ---- */
-typedef enum {
-    NOMINAL,
-} ObcState_t;
-
 /* ---- Module-level variables ---- */
 static TaskHandle_t payload_task_handle;
 static TaskHandle_t eps_task_handle;
@@ -42,13 +38,18 @@ static TaskHandle_t comms_task_handle;
 static TaskHandle_t obdh_task_handle;
 
 
+/* ---- Public getters ---- */
+
+TaskHandle_t obc_get_comms_handle(void)   { return comms_task_handle; }
+TaskHandle_t obc_get_eps_handle(void)     { return eps_task_handle; }
+TaskHandle_t obc_get_obdh_handle(void)    { return obdh_task_handle; }
+TaskHandle_t obc_get_payload_handle(void) { return payload_task_handle; }
+
 /* ---- Private function prototypes ---- */
 static void setup_obc(void);
 static void process_obc(ObcState_t *currentState);
 // static void create_queues(void);  // TODO: implement this function
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState);
-static void check_notifications(void);
-static void change_state_if_needed(void);
 static uint32_t waitForNotification(void);
 static void handlePayloadCapture(void);
 static void handle_health_faults(EventBits_t faults);
@@ -78,7 +79,6 @@ void obc_task(void *pv_parameters) {
        {
            handle_health_faults(faults);
        }
-       vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
 }
@@ -124,25 +124,13 @@ static void setup_obc(void) {
     health_config(pdMS_TO_TICKS(5000));
 }
 
-static void check_notifications(void) {
-    // TODO: implement notification checking
-}
-
-static void change_state_if_needed(void) {
-    // TODO: implement state change logic
-}
 
 static void process_obc(ObcState_t *currentState) {
 
     //printf("Processing OBC...\r\n");
+    currentState = check_next_state(currentState);
 
     suspend_and_resume_tasks_depending_on_state(currentState);
-
-    // Finish implementing... Need to know how the rest of the tasks work...
-
-    check_notifications();
-
-    change_state_if_needed();
 
 }
 
@@ -157,7 +145,7 @@ static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState
             break;
 
         default:
-            printf("Unknown state\r\n");
+            //printf("Unknown state\r\n");
             break;
 
     }

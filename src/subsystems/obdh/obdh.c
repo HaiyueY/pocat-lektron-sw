@@ -69,7 +69,7 @@ void setup_obdh(void) {
 void process_obdh(void) {
     obdh_request request;
     HAL_StatusTypeDef status=HAL_OK;
-    printf("Processing OBDH...\n");
+    //printf("Processing OBDH...\n");
 
     BaseType_t result_queue= xQueueReceive(obdh_queue_handle,&request,pdMS_TO_TICKS(1000));
     if (result_queue== pdPASS)

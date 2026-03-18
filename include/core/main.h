@@ -20,7 +20,10 @@
 /** @brief MSP post-initialization callback for TIM peripheral GPIO configuration. */
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
-/** @brief Error handler function  
+/** @brief Return the OBC task handle (created in main). */
+TaskHandle_t main_get_obc_handle(void);
+
+/** @brief Error handler function
 * @todo Implement proper error handling mechanism.
 */
 void Error_Handler(void);

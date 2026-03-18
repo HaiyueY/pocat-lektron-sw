@@ -41,8 +41,6 @@
 // COMMS State Machine starts in startup state
 static CommsState_t CommsState = SLEEP;
 
-// Task handles for telecommand notification targets (populated during init)
-static tc_task_handles_t tc_handles = {0}; 
 
 static CommsPackets_t CommsPackets = {
     .packetWindow = 5
@@ -240,7 +238,7 @@ void state_process(void)
     } else {
         /* Telecommand received — dispatch it */
         uint8_t tc_id = CommsPackets.RxData[2]; /* save before tc_process may clear RxData */
-        int need_ack = tc_process(CommsPackets.RxData, &tc_handles);
+        int need_ack = tc_process(CommsPackets.RxData);
         if (need_ack) {
             uint8_t ack_pkt[COMMS_PKT_SIZE] = {0};
             ack_pkt[0] = 0xC8;   // header required by GS OnRxDone 

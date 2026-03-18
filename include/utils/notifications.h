@@ -36,6 +36,9 @@
 #define N_OBC_SOFT_REBOOT                (1u << 6)  /**< Perform a soft reboot (without clearing flash) */
 #define N_OBC_PERIPHERALS_REBOOT         (1u << 7)  /**< Reboot peripheral devices */
 
+#define N_OBC_EXIT_STATE_GROUP_MASK (N_OBC_EXIT_STATE_TO_NOMINAL | N_OBC_EXIT_STATE_TO_CONTINGENCY | \
+                                N_OBC_EXIT_STATE_TO_SUNSAFE | N_OBC_EXIT_STATE_TO_SURVIVAL)
+
 /* ── COMMS Task Notifications ───────────────────────────────────────────── */
 
 #define N_COMMS_NEW_CONFIG               (1u << 0)  /**< New comms configuration available in memory */

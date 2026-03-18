@@ -21,6 +21,8 @@
 #include "queue.h"
 
 #include "FreeRTOS.h"
+#include "notifications.h"
+
 extern QueueHandle_t obdh_queue_handle;
 
 
@@ -278,10 +280,10 @@ HAL_StatusTypeDef OBDH_Read_Request(uint32_t address, uint8_t *data, size_t len)
     
     //Block and return result. Timeout of 2 seconds
     
-    BaseType_t result_wait= xTaskNotifyWait(0,OBC_EVENT_OBDH_DONE,&received_events,pdMS_TO_TICKS(2000));
+    BaseType_t result_wait= xTaskNotifyWait(0,N_FLASH_OPERATION_COMPLETE,&received_events,pdMS_TO_TICKS(2000));
     if (result_wait == pdPASS)
     {
-        if (received_events & OBC_EVENT_OBDH_DONE)
+        if (received_events & N_FLASH_OPERATION_COMPLETE)
         {
             return operation_status;
         }

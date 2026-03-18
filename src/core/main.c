@@ -26,6 +26,8 @@
 /** @brief Handle for the OBC FreeRTOS task*/
 static TaskHandle_t obc_task_handle;
 
+TaskHandle_t main_get_obc_handle(void) { return obc_task_handle; }
+
 /* Private function prototypes */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
