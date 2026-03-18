@@ -129,7 +129,7 @@ void setup_comms(void)
 
     CommsState = SLEEP; // Start in sleep state
 
-    //beacon_init();
+    beacon_init();
 }
 
 void process_comms(void)
@@ -145,8 +145,14 @@ void process_comms(void)
 
     if (notif & N_COMMS_TRANSMIT_BEACON) {
         uint8_t beacon_pkt[COMMS_PKT_SIZE];
-        memset(beacon_pkt, 0xFF, sizeof(beacon_pkt));
-        txq_enqueue(beacon_pkt, COMMS_PKT_SIZE, 0, 0);
+        beacon_pkt[0] = 0xC8;   // header required by GS OnRxDone 
+        beacon_pkt[1] = 0x9D;   // header required by GS OnRxDone 
+        beacon_pkt[2] = 0;  // TC id so that GS knows what is being ACKed
+        beacon_pkt[3] = 0;
+        beacon_pkt[4] = 0;
+        beacon_pkt[5] = ACK_M;
+        txq_enqueue(beacon_pkt, COMMS_PKT_SIZE, 0, 1);
+        CommsState = TRANSMIT;
     }
 
     switch(CommsState)

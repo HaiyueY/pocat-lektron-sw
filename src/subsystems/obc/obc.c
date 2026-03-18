@@ -79,6 +79,7 @@ void obc_task(void *pv_parameters) {
        {
            handle_health_faults(faults);
        }
+       vTaskDelay(pdMS_TO_TICKS(2000)); // Delay to prevent busy looping, adjust as needed  
     }
 
 }
