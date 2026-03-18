@@ -66,6 +66,8 @@ void reset_obdh_task(void);
 // a considerar/eliminar:
 static ObcState_t currentState;
 
+ObcState_t obc_get_current_state(void) { return currentState; }
+
 /* ---- Public function definitions ---- */
 
 void obc_task(void *pv_parameters) {

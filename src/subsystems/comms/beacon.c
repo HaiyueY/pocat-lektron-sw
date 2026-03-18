@@ -5,6 +5,8 @@
 #include "beacon.h"
 #include "notifications.h"
 #include "obc.h"
+#include "tx_queue.h"
+#include "time.h"
 
 
 /* ---- Module-level variables ---- */
@@ -43,4 +45,36 @@ static void beacon_timer_callback(TimerHandle_t xTimer)
     if (comms != NULL) {
         xTaskNotify(comms, N_COMMS_TRANSMIT_BEACON, eSetBits);
     }
+}
+
+void send_beacon(void)
+{
+    uint8_t beacon_pkt[10];
+
+    // First 4 bytes are epoch:
+    uint32_t epoch = time_get_unix();
+    beacon_pkt[0] = (epoch >> 24) & 0xFF;
+    beacon_pkt[1] = (epoch >> 16) & 0xFF;
+    beacon_pkt[2] = (epoch >> 8) & 0xFF;
+    beacon_pkt[3] = epoch & 0xFF;
+
+    // Temperature MCU (dummy value for now)
+    beacon_pkt[4] = 0xFF; // -1 in two's complement
+
+    // Temperature BATT (dummy value for now)
+    beacon_pkt[5] = 0xFF; // -1 in two's complement
+
+    // OBC state
+    beacon_pkt[6] = obc_get_current_state();
+
+    // Battery voltage (dummy value for now)
+    beacon_pkt[7] = 0xFF; // 25.5V in
+
+    // Battery Amp (dummy value for now)
+    beacon_pkt[8] = 0xFF; // -1 in two's complement
+
+    // Deployment status
+    beacon_pkt[9] = 0; // Not deployed
+
+    txq_enqueue(beacon_pkt, 10, 0, 1);
 }

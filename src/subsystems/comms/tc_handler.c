@@ -16,6 +16,7 @@
 #include "notifications.h"
 #include "obc.h"
 #include "main.h"
+#include "time.h"
 
 /* ---- Private helpers ---- */
 

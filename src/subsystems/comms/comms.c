@@ -144,14 +144,7 @@ void process_comms(void)
     xTaskNotifyWait(0, N_COMMS_TRANSMIT_BEACON, &notif, 0);
 
     if (notif & N_COMMS_TRANSMIT_BEACON) {
-        uint8_t beacon_pkt[COMMS_PKT_SIZE];
-        beacon_pkt[0] = 0xC8;   // header required by GS OnRxDone 
-        beacon_pkt[1] = 0x9D;   // header required by GS OnRxDone 
-        beacon_pkt[2] = 0;  // TC id so that GS knows what is being ACKed
-        beacon_pkt[3] = 0;
-        beacon_pkt[4] = 0;
-        beacon_pkt[5] = ACK_M;
-        txq_enqueue(beacon_pkt, COMMS_PKT_SIZE, 0, 1);
+        send_beacon();
         CommsState = TRANSMIT;
     }
 
@@ -283,7 +276,7 @@ void state_transmit(void)
     entry->tries++;
 
     /* Interleave a copy so the queued data stays intact for retransmission */
-    uint8_t tx_buf[COMMS_PKT_SIZE];
+    uint8_t tx_buf[entry->length];
     memcpy(tx_buf, entry->data, entry->length);
     Interleave(tx_buf, entry->length);
     RadioLib_Transmit(tx_buf, (uint16_t)entry->length);
