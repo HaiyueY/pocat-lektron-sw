@@ -103,22 +103,30 @@ int16_t RadioLib_Standby(void);
 int16_t RadioLib_ScanChannel(void);
 
 /**
- * @brief CAD scan followed by automatic RX in hardware (CAD→RX mode).
+ * @brief Continuously scan for LoRa activity (CAD) and receive when detected.
  *
- * Uses the SX1262's CAD_GOTO_RX exit mode so that the radio transitions from CAD
- * to RX without any software gaps (which has caused problems...).
+ * Back-to-back CAD scanning loop for up to @p cadTimeoutMs.
+ * Uses the SX1262's CAD_GOTO_RX exit mode so that the radio transitions from
+ * CAD to RX in hardware with zero software gap, avoiding the timing issues
+ * that caused the previous single-shot CAD approach to miss most packets.
  *
- * @param rxTimeoutMs  Maximum time (ms) to wait for a packet after CAD triggers.
+ * When LoRa activity is detected the radio automatically enters RX mode and
+ * waits up to @p rxTimeoutMs for the full packet.  If the RX phase times out
+ * (possible false CAD detection), scanning resumes until @p cadTimeoutMs
+ * expires.
+ *
+ * @param cadTimeoutMs Overall time budget (ms) for the CAD scanning loop.
+ * @param rxTimeoutMs  Maximum time (ms) to wait for a packet after CAD detects activity.
  * @param outBuf       Buffer to write received data into.
  * @param bufSize      Size of outBuf.
  * @param outLen       [out] Actual number of bytes received (may be NULL).
  * @param outRssi      [out] RSSI in dBm (may be NULL).
  * @param outSnr       [out] SNR in dB (may be NULL).
  * @return 0 on success,
- *         RADIOLIB_CHANNEL_FREE if no activity detected,
+ *         RADIOLIB_CHANNEL_FREE if no activity detected within cadTimeoutMs,
  *         or negative RadioLib error code on failure.
  */
-int16_t RadioLib_CadReceive(uint32_t rxTimeoutMs,
+int16_t RadioLib_CadReceive(uint32_t cadTimeoutMs, uint32_t rxTimeoutMs,
                        uint8_t *outBuf, uint16_t bufSize,
                        uint16_t *outLen, int16_t *outRssi, int8_t *outSnr);
 

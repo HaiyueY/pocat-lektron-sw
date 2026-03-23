@@ -16,7 +16,7 @@
 
 /* ---- Constants ---- */
 
-#define COMMS_PKT_SIZE 36  /* maximum packet size in bytes; actual length is variable */
+#define COMMS_PKT_SIZE 48
 
 /* ---- Type definitions ---- */
 
