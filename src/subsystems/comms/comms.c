@@ -50,7 +50,7 @@ static CommsPackets_t CommsPackets = {
 };
 
 static CommsFlags_t CommsFlags = {
-    .cadMode = 1, // set to 0 in original code
+    .rxMode = RX_MODE_DUTY_CYCLE,
     .cadRx = 0,
     .callbackFinished = 0,
     // .txAck = 0, legacy. ACK's should be enqueued in tx_queue
@@ -173,23 +173,26 @@ void state_sleep(void)
     int8_t   rx_snr  = 0;
     int16_t  ret;
 
-    if (CommsFlags.cadMode) {
-        /* CAD→RX: runs back-to-back CAD scans for up to rxTime ms.
-           When a LoRa preamble is detected the SX1262 transitions to RX
-           in hardware (zero software gap) and waits for the full packet.
-           Much more power-efficient than continuous RX. */
-        ret = RadioLib_CadReceive(CommsSettings.rxTime,   /* CAD scanning budget  */
-                                  CommsSettings.rxTime,   /* RX timeout after CAD */
-                                  CommsPackets.RxData, COMMS_PKT_SIZE,
-                                  &rx_len, &rx_rssi, &rx_snr);
-    } else {
-        /* Direct blocking receive — radio stays in RX for the full timeout */
-        ret = RadioLib_Receive(CommsSettings.rxTime,
-                               CommsPackets.RxData, COMMS_PKT_SIZE,
-                               &rx_len, &rx_rssi, &rx_snr);
+    switch (CommsFlags.rxMode) {
+        case RX_MODE_CAD:
+            ret = RadioLib_CadReceive(CommsSettings.rxTime,   /* CAD scanning budget  . TODO: review*/
+                                      CommsSettings.rxTime,   /* RX timeout after CAD */
+                                      CommsPackets.RxData, COMMS_PKT_SIZE,
+                                      &rx_len, &rx_rssi, &rx_snr);
+            break;
+        case RX_MODE_DUTY_CYCLE:
+            ret = RadioLib_DutyCycleReceive(CommsSettings.rxTime, LORA_PREAMBLE_LENGTH,
+                                            CommsPackets.RxData, COMMS_PKT_SIZE,
+                                            &rx_len, &rx_rssi, &rx_snr);
+            break;
+        default: 
+            ret = RadioLib_Receive(CommsSettings.rxTime,
+                                   CommsPackets.RxData, COMMS_PKT_SIZE,
+                                   &rx_len, &rx_rssi, &rx_snr);
+            break;
     }
 
-    if (ret != 0) { return; } /* Timeout, channel free, or error — stay in SLEEP */
+    if (ret != 0) { return; }
 
     Deinterleave(CommsPackets.RxData, (int)rx_len);
 
@@ -202,21 +205,17 @@ void state_process(void)
 {
 
     if (CommsPackets.RxData[5] == ACK_M) {
-        /* Ground acknowledged our last downlink — remove the head of the TX queue,
-           but only if it is actually the stop-and-wait entry awaiting an ACK.
-           Guards against spurious ACKs accidentally consuming unrelated entries. */
         TxQueueEntry_t *head = txq_peek();
         if (head != NULL && head->stop_and_wait) {
             txq_dequeue();
         }
     } else {
-        /* Telecommand received — dispatch it */
-        uint8_t tc_id = CommsPackets.RxData[2]; /* save before tc_process may clear RxData */
+        uint8_t tc_id = CommsPackets.RxData[2];
         int need_ack = tc_process(CommsPackets.RxData);
         if (need_ack) {
             uint8_t ack_pkt[COMMS_PKT_SIZE] = {0};
-            ack_pkt[0] = 0xC8;   // header required by GS OnRxDone 
-            ack_pkt[1] = 0x9D;   // header required by GS OnRxDone 
+            ack_pkt[0] = 0xC8;   
+            ack_pkt[1] = 0x9D;   
             ack_pkt[2] = tc_id;  // TC id so that GS knows what is being ACKed
             ack_pkt[3] = 0;
             ack_pkt[4] = 0;
@@ -246,7 +245,6 @@ void state_transmit(void)
     RadioLib_Transmit(tx_buf, (uint16_t)entry->length);
 
     if (entry->stop_and_wait) {
-        /* Leave the entry in the queue; wait for ACK in the next PROCESS cycle */
         CommsState = SLEEP;
     } else {
         txq_dequeue();

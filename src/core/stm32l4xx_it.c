@@ -184,4 +184,13 @@ void SysTick_Handler(void)
 
 /* USER CODE BEGIN 1 */
 
+/**
+ * @brief EXTI lines [15:10] interrupt handler.
+ * Routes DIO1 (PA10, EXTI line 10) to the HAL dispatcher, which calls
+ * HAL_GPIO_EXTI_Callback → stm32RadioLibHal::handleExtiCallback.
+ */
+void EXTI15_10_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_10);
+}
+
 /* USER CODE END 1 */

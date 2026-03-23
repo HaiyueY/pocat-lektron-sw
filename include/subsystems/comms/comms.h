@@ -33,8 +33,14 @@ typedef struct {
     uint8_t packetWindow;
 } CommsPackets_t;
 
+typedef enum {
+    RX_MODE_DIRECT     = 0,
+    RX_MODE_CAD        = 1,
+    RX_MODE_DUTY_CYCLE = 2,
+} CommsRxMode_t;
+
 typedef struct {
-    int cadMode;
+    CommsRxMode_t rxMode;
     int callbackFinished;
     int cadRx;
     int txAck;

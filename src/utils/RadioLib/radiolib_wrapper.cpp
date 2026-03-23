@@ -5,6 +5,8 @@
 #include <RadioLib.h>
 #include "stm32_radiolib_hal.h"
 #include <stdio.h>
+#include "FreeRTOS.h"
+#include "semphr.h"
 
 
 // Instantiate C++ outside of extern "C"
@@ -33,6 +35,14 @@ static float bwCodeToKHz(uint8_t bw_code) {
     case 2: return 500.0f;
     default: return 125.0f;
   }
+}
+
+static SemaphoreHandle_t s_dutyCycleSem = NULL;
+
+static void dutyCycleIsrCallback(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(s_dutyCycleSem, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 extern "C" { // to stop name mangling
@@ -285,6 +295,63 @@ extern "C" { // to stop name mangling
             }
             return st;
         }
+    }
+
+    int16_t RadioLib_DutyCycleReceive(uint32_t listenMs, uint16_t preambleLen,
+                                      uint8_t *outBuf, uint16_t bufSize,
+                                      uint16_t *outLen, int16_t *outRssi, int8_t *outSnr)
+    {
+        // Create semaphore once (persists across calls)
+        if (s_dutyCycleSem == NULL) {
+            s_dutyCycleSem = xSemaphoreCreateBinary();
+            if (s_dutyCycleSem == NULL) return -1;
+        }
+
+        // Drain any stale signal from a previous interrupted cycle
+        xSemaphoreTake(s_dutyCycleSem, 0);
+
+        // Attach DIO1 rising-edge interrupt → ISR gives semaphore
+        hal.attachInterrupt(mod.getIrq(), dutyCycleIsrCallback, hal.GpioInterruptRising);
+
+        // Start hardware duty cycle RX (radio cycles autonomously)
+        int16_t state = radio.startReceiveDutyCycleAuto(
+            preambleLen, 0,
+            RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
+            RADIOLIB_IRQ_RX_DEFAULT_MASK);
+        if (state != RADIOLIB_ERR_NONE) {
+            hal.detachInterrupt(mod.getIrq());
+            return state;
+        }
+
+        // Block until DIO1 fires (RX_DONE) or our listen window expires
+        BaseType_t got = xSemaphoreTake(s_dutyCycleSem, pdMS_TO_TICKS(listenMs));
+
+        // Stop radio and detach interrupt
+        radio.standby();
+        hal.detachInterrupt(mod.getIrq());
+
+        if (got != pdTRUE) {
+            radio.clearIrqFlags(RADIOLIB_SX126X_IRQ_ALL);
+            return RADIOLIB_ERR_RX_TIMEOUT;
+        }
+
+        // DIO1 fired — check what happened
+        uint32_t irq = radio.getIrqFlags();
+
+        if (!(irq & RADIOLIB_SX126X_IRQ_RX_DONE)) {
+            radio.clearIrqFlags(RADIOLIB_SX126X_IRQ_ALL);
+            return RADIOLIB_ERR_RX_TIMEOUT;
+        }
+
+        // Read the packet
+        size_t pktLen = radio.getPacketLength();
+        int16_t st = radio.readData(outBuf, bufSize);
+        if (st == RADIOLIB_ERR_NONE) {
+            if (outLen)  *outLen  = (uint16_t)(pktLen > bufSize ? bufSize : pktLen);
+            if (outRssi) *outRssi = (int16_t)radio.getRSSI();
+            if (outSnr)  *outSnr  = (int8_t)radio.getSNR();
+        }
+        return st;
     }
 
     void RadioLib_IrqProcess(void) {
