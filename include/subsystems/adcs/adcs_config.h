@@ -2,11 +2,12 @@
  * @file adcs_config.h
  * @brief ADCS configuration parameters derived from satellite physical model.
  *
- * Parameters are sourced from the MATLAB simulation configuration files:
- *   - Sim_data_structure.m  (dipole limits, inertia)
- *   - Sim_pq_model.m        (satellite geometry)
- *   - Sim_PID_controller.m  (control gains)
- *   - Sim_sat_sensors.m     (sensor noise models)
+ * Parameters are sourced from:
+ *   - docs/Max_mag_moment_calc.m (coil geometry, dipole limits)
+ *   - Sim_data_structure.m       (inertia)
+ *   - Sim_pq_model.m             (satellite geometry)
+ *   - Sim_PID_controller.m       (control gains)
+ *   - Sim_sat_sensors.m          (sensor noise models)
  *
  * All values use SI units unless otherwise noted.
  */
@@ -52,25 +53,30 @@ extern "C" {
  * ====================================================================== */
 
 /** Maximum magnetic dipole per axis [A·m²]
- *  Source: Sim_data_structure.m → d.maxmoment (coil geometry calculation)
- *  Lateral (X,Z): IoA * Sx = 32mA × 0.05316 m² = 17.01e-4 A·m²
- *  Top     (Y):   IoA * Sy = 32mA × 0.02867 m² =  9.17e-4 A·m² */
-#define MTQ_MAX_DIPOLE_X    17.01e-4
-#define MTQ_MAX_DIPOLE_Y     9.17e-4
-#define MTQ_MAX_DIPOLE_Z    17.01e-4
+ *  Source: docs/Max_mag_moment_calc.m (spiral coil geometry + dual coils)
+ *  Each axis has 2 coils (opposite faces), wired to produce additive moment.
+ *  Lateral (X,Z): IoA * Sx = 150mA × 0.106306 m² = 15.946e-3 A·m²
+ *  Top     (Y):   IoA * Sy = 150mA × 0.056065 m² =  8.410e-3 A·m² */
+#define MTQ_MAX_DIPOLE_X    15.946e-3
+#define MTQ_MAX_DIPOLE_Y     8.410e-3
+#define MTQ_MAX_DIPOLE_Z    15.946e-3
 
 /** Magnetorquer coil parameters for dipole↔intensity conversion
  *  dipole = intensity * coil_factor  →  intensity = dipole / coil_factor
  *  Constraint: MTQ_MAX_DIPOLE = MTQ_MAX_INTENSITY_A × MTQ_COIL_FACTOR
- *  Source: Sim_data_structure.m (Sx, Sy, Sz from spiral coil geometry)
- *  See docs/adcs_detumble_high_rate_analysis.md §3 */
-#define MTQ_COIL_FACTOR_X   0.053156  /**< 17.01e-4 / 0.032 = Sx [turns·m²] */
-#define MTQ_COIL_FACTOR_Y   0.028656  /**<  9.17e-4 / 0.032 = Sy [turns·m²] */
-#define MTQ_COIL_FACTOR_Z   0.053156  /**< 17.01e-4 / 0.032 = Sz [turns·m²] */
+ *
+ *  Source: docs/Max_mag_moment_calc.m
+ *    coil_factor = Σ(Nlayers × side_i²) × N_coils_per_axis
+ *    Lateral: 35 turns, L=32.3mm, d=0.22mm, w=0.22mm, 4 layers, ×2 coils
+ *    Top:     29 turns, L=26.2mm, d=0.20mm, w=0.25mm, 4 layers, ×2 coils */
+#define MTQ_COIL_FACTOR_X   0.106306  /**< 15.946e-3 / 0.150 = Sx×2 [turns·m²] */
+#define MTQ_COIL_FACTOR_Y   0.056065  /**<  8.410e-3 / 0.150 = Sy×2 [turns·m²] */
+#define MTQ_COIL_FACTOR_Z   0.106306  /**< 15.946e-3 / 0.150 = Sz×2 [turns·m²] */
 
-/** BD2606MVV driver current limits [mA] */
+/** Driver current limits [mA]
+ *  Source: docs/Max_mag_moment_calc.m → IomA = 150 mA */
 #define MTQ_MIN_INTENSITY_MA    0.5
-#define MTQ_MAX_INTENSITY_MA    32.0
+#define MTQ_MAX_INTENSITY_MA    150.0
 #define MTQ_INTENSITY_STEP_MA   0.5
 
 /* =========================================================================
