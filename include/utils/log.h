@@ -28,4 +28,5 @@
  * @param len Number of bytes to transmit.
  * @return    Number of bytes transmitted.
  */
+void log_init(void);
 int _write(int file, char *ptr, int len);

@@ -14,6 +14,9 @@
 
 #include <stdint.h>
 
+/* ── General Task Notifications ─────────────────────────────────────────── */
+#define N_FLASH_OPERATION_COMPLETE         (1u << 31)  /**< Flash operation completed (success or failure) */
+
 /* ── ADCS Task Notifications ────────────────────────────────────────────── */
 
 #define N_ADCS_DESIRED_STATE_IDLE        (1u << 0)  /**< Set ADCS state to IDLE */
@@ -32,6 +35,9 @@
 #define N_OBC_HARD_REBOOT                (1u << 5)  /**< Perform a hard reboot (including flash) */
 #define N_OBC_SOFT_REBOOT                (1u << 6)  /**< Perform a soft reboot (without clearing flash) */
 #define N_OBC_PERIPHERALS_REBOOT         (1u << 7)  /**< Reboot peripheral devices */
+
+#define N_OBC_EXIT_STATE_GROUP_MASK (N_OBC_EXIT_STATE_TO_NOMINAL | N_OBC_EXIT_STATE_TO_CONTINGENCY | \
+                                N_OBC_EXIT_STATE_TO_SUNSAFE | N_OBC_EXIT_STATE_TO_SURVIVAL)
 
 /* ── COMMS Task Notifications ───────────────────────────────────────────── */
 

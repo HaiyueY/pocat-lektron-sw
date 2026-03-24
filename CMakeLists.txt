@@ -69,7 +69,7 @@ file(GLOB_RECURSE STM32CUBEMX_SOURCES
 file(GLOB_RECURSE PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/Radiolib/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/RadioLib/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/subsystems/*/*.c
 )
 
@@ -95,10 +95,14 @@ add_executable(${EXECUTABLE}
 )
 
 
+# Mock radio option (no hardware required: prints config and TX packets, RX always times out)
+option(RADIO_MOCK "Use mock radio implementation" OFF)
+
 # Embedded macros(defines)
 target_compile_definitions(${EXECUTABLE} PRIVATE
     ${MCU_MODEL}
     USE_HAL_DRIVER
+    $<$<BOOL:${RADIO_MOCK}>:RADIO_MOCK>
 )
 
 # Add header directories (AFTER add_executable !!)

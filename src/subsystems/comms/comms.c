@@ -4,6 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "comms.h"
+#include "tx_queue.h"
 #include "tc_handler.h"
 #include "radiolib_wrapper.h"
 #include "health.h"
@@ -11,20 +12,19 @@
 #include <string.h>
 #include <stdlib.h>
 #include "interleaving.h"
+#include "beacon.h"
+#include "notifications.h"
 
 
 /* ---- Macros and constants ---- */
 
 #define TX_OUTPUT_POWER                     18        // dBm
 
-#define LORA_BANDWIDTH                      0         // [0: 125 kHz,
-                                                      //  1: 250 kHz,
-                                                      //  2: 500 kHz,
-                                                      //  3: Reserved]
+#define LORA_BANDWIDTH                      0         // [0: 125 kHz, 1: 250 kHz, 2: 500 kHz, 3: Reserved]
 #define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
 #define LORA_SYMBOL_TIMEOUT                 100       // Symbols
 #define LORA_FIX_LENGTH_PAYLOAD_ON          0
-#define LORA_IQ_INVERSION_ON                0
+#define LORA_IQ_INVERSION                   0         // 0 = off, 1 = on
 
 //     Transmit message types 
 #define ACK_M     							2
@@ -37,19 +37,12 @@
 
 #define MODEM_LORA              1 // To-do: revise
 
-#define COMMS_PKT_SIZE 48
-
 
 /* ---- Module-level variables ---- */
 
 // COMMS State Machine starts in startup state
 static CommsState_t CommsState = SLEEP;
 
-// Task handles for telecommand notification targets (populated during init)
-static tc_task_handles_t tc_handles = {0}; 
-
-// Radio event handler struct
-static RadioEvents_t RadioEvents;
 
 static CommsPackets_t CommsPackets = {
     .packetWindow = 5
@@ -71,20 +64,6 @@ static CommsSettings_t CommsSettings = {
     .ackTime = 4000
 };
 
-
-/*!
- * \brief Function configuring CAD parameters
- * \param [in]  cadSymbolNum   The number of symbol to use for CAD operations
- *                             [LORA_CAD_01_SYMBOL, LORA_CAD_02_SYMBOL,
- *                              LORA_CAD_04_SYMBOL, LORA_CAD_08_SYMBOL,
- *                              LORA_CAD_16_SYMBOL]
- * \param [in]  cadDetPeak     Limit for detection of SNR peak used in the CAD
- * \param [in]  cadDetMin      Set the minimum symbol recognition for CAD
- * \param [in]  cadTimeout     Defines the timeout value to abort the CAD activity
- */
-// need to implement RadioLoRaCadSymbols_t
-// void SX126xConfigureCad( RadioLoRaCadSymbols_t cadSymbolNum, uint8_t cadDetPeak, uint8_t cadDetMin , uint32_t cadTimeout);
-
 void TxPrepare(uint8_t messageType);
 
 
@@ -103,16 +82,12 @@ void state_transmit(void);
 
 void comms_task(void *pv_parameters)
 {
-
     setup_comms();
 
     for(;;) 
     {
         process_comms();
         health_kick(HEALTH_BIT_COMMS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        //printf("COMMS loop\r\n");
-
     }
 }
 
@@ -127,39 +102,51 @@ void setup_comms(void)
     // RadioEvents.RxError = OnRxError;
     // RadioEvents.CadDone = OnCadDone;
 
-    RadioLib_Init(&RadioEvents);  // Initializes the Radio with radiolib
+    if (RadioLib_Init() != 0) {
+        printf("COMMS: Radio init failed, aborting setup\r\n");
+        return;
+    }
     
     RadioLib_SetChannel(CommsSettings.RF_F); // Configures the transceiver
 
-    RadioLib_SetTxConfig( // Configura els parametres de TX
-        11,                     // SF
-        1,                      // CR
-        TX_OUTPUT_POWER,        // Potencia de transmissio
-        LORA_BANDWIDTH,         // BW
-        LORA_IQ_INVERSION_ON,   // IQ
-        1,                   // CRC ON
-        LORA_PREAMBLE_LENGTH);  // Sequencia la sincronitzacio
+    // SF=8, CR=1 to match the CubeCell ground station
+    RadioLib_SetTxConfig(
+        8,                      // SF
+        1,                      // CR  4/5
+        TX_OUTPUT_POWER,        // Potència de transmissió
+        LORA_BANDWIDTH,         // BW  125 kHz
+        LORA_IQ_INVERSION,     // IQ inversion off
+        1,                      // CRC on
+        LORA_PREAMBLE_LENGTH);  // Preamble 8
 
-    RadioLib_SetRxConfig( // Configura els parametres de RX
-        11,                     // SF
-        1,                      // CR
-        LORA_BANDWIDTH,         // BW
-        LORA_IQ_INVERSION_ON,   // IQ
-        1,                   // CRC ON
-        LORA_PREAMBLE_LENGTH) ; // Sequencia la sincronitzacio
+    RadioLib_SetRxConfig(
+        8,                      // SF 
+        1,                      // CR  4/5
+        LORA_BANDWIDTH,         // BW  125 kHz
+        LORA_IQ_INVERSION,     // IQ inversion off
+        1,                      // CRC on
+        LORA_PREAMBLE_LENGTH);  // Preamble 8
 
     CommsState = SLEEP; // Start in sleep state
 
+    beacon_init();
 }
 
 void process_comms(void)
 {
-    // TODO: Notifications    
+    // TODO: Notifications
     // if N_COMMS_NEW_CONFIG        New comms configuration available in memory
     // if N_COMMS_NEW_PARAMS        New parameter set available in memory
     // if N_COMMS_STOP_RF           Stop RF transmission
     // if N_COMMS_RESUME_RF         Resume RF transmission
-    // if N_COMMS_TRANSMIT_BEACON   Transmit the beacon
+
+    uint32_t notif = 0;
+    xTaskNotifyWait(0, N_COMMS_TRANSMIT_BEACON, &notif, 0);
+
+    if (notif & N_COMMS_TRANSMIT_BEACON) {
+        send_beacon();
+        CommsState = TRANSMIT;
+    }
 
     switch(CommsState)
     {   
@@ -175,10 +162,27 @@ void process_comms(void)
 }
 
 
-void state_sleep(void) 
-{   
-    RadioLib_Sleep();
-    vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
+void state_sleep(void)
+{
+    // Implemented simple receiving mechanism for now...
+    uint16_t rx_len  = 0;
+    int16_t  rx_rssi = 0;
+    int8_t   rx_snr  = 0;
+
+    int16_t ret = RadioLib_Receive(CommsSettings.rxTime,
+                                   CommsPackets.RxData, COMMS_PKT_SIZE,
+                                   &rx_len, &rx_rssi, &rx_snr);
+
+    if (ret != 0) { return; } /* Timeout or radio error — stay in SLEEP */
+
+    Deinterleave(CommsPackets.RxData, (int)rx_len);
+
+    /* TODO: Validate that the packet is ours and is correct */
+    
+    CommsState = PROCESS;
+
+    //RadioLib_Sleep();
+    //vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
 
     // TODO:
     // Receive in CAD mode blocking until timeout or reception, 
@@ -237,21 +241,57 @@ void state_sleep(void)
 
 void state_process(void)
 {
-   // TODO:
-   // Process the received packet, 
 
-   // if telecommmand -> call tc_process (it shall enqueue ack)
-   // if ACK -> remove acknoleged packet from tx_queue
+    if (CommsPackets.RxData[5] == ACK_M) {
+        /* Ground acknowledged our last downlink — remove the head of the TX queue */
+        txq_dequeue();
+    } else {
+        /* Telecommand received — dispatch it */
+        uint8_t tc_id = CommsPackets.RxData[2]; /* save before tc_process may clear RxData */
+        int need_ack = tc_process(CommsPackets.RxData);
+        if (need_ack) {
+            uint8_t ack_pkt[COMMS_PKT_SIZE] = {0};
+            ack_pkt[0] = 0xC8;   // header required by GS OnRxDone 
+            ack_pkt[1] = 0x9D;   // header required by GS OnRxDone 
+            ack_pkt[2] = tc_id;  // TC id so that GS knows what is being ACKed
+            ack_pkt[3] = 0;
+            ack_pkt[4] = 0;
+            ack_pkt[5] = ACK_M;
+            txq_enqueue(ack_pkt, COMMS_PKT_SIZE, 0, 1);
+        }
+    }
 
-   // if tx_queue is not empty -> change state to transmit, 
-   // else -> change state to sleep 
+    CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
 }
 
 
 void state_transmit(void)
 {
-    // TODO:
-    // Transmit once every packet in the tx_queue and change state to sleep when done. 
+    TxQueueEntry_t *entry = txq_peek();
+    if (entry == NULL) {
+        CommsState = SLEEP;
+        return;
+    }
+
+    entry->tries++;
+
+    /* Interleave a copy so the queued data stays intact for retransmission */
+    uint8_t tx_buf[entry->length];
+    memcpy(tx_buf, entry->data, entry->length);
+    Interleave(tx_buf, entry->length);
+    RadioLib_Transmit(tx_buf, (uint16_t)entry->length);
+
+    if (entry->is_ack) {
+        /* ACKs are fire-and-forget — dequeue immediately, no GS acknowledgement expected */
+        txq_dequeue();
+        CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
+    } else if (entry->stop_and_wait) {
+        /* Leave the entry in the queue; wait for ACK in the next PROCESS cycle */
+        CommsState = SLEEP;
+    } else {
+        txq_dequeue();
+        CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
+    }
 }
 
 

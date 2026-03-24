@@ -28,3 +28,6 @@ extern UART_HandleTypeDef huart2;
 
 /** @brief Global Independent Watchdog handle. */
 extern IWDG_HandleTypeDef hiwdg;
+
+/** @brief Global RTC handle. */
+extern RTC_HandleTypeDef hrtc;

@@ -10,8 +10,6 @@
 #pragma once
 
 #include <stdint.h>
-#include "FreeRTOS.h"
-#include "task.h"
 
 /**
  * @brief Telecommand IDs matching the GS uplink protocol.
@@ -79,31 +77,15 @@ typedef enum {
 } tc_id_t;
 
 /**
- * @brief Task handles required by the TC handler to send notifications.
- *
- * The COMMS task must populate this struct with the handles of all tasks
- * that may receive notifications as a result of telecommand processing.
- * Handles are owned by the OBC task, which should expose them via
- * getter functions or pass them during COMMS initialisation.
- */
-typedef struct {
-    TaskHandle_t obc;
-    TaskHandle_t adcs;
-    TaskHandle_t eps;
-    TaskHandle_t obdh;
-    TaskHandle_t payload;
-    TaskHandle_t comms;     /**< Self-handle for COMMS-targeted notifications */
-} tc_task_handles_t;
-
-/**
  * @brief Process a received telecommand.
  *
  * Parses the TC ID from @p rx_data[2], performs any local processing
  * (ACK enqueue, OBDH writes, config updates), and sends the appropriate
- * FreeRTOS task notification to the target subsystem.
+ * FreeRTOS task notification to the target subsystem.  Task handles are
+ * obtained at call time via the OBC/main getter functions, so they are
+ * always up-to-date even after a task reset.
  *
  * @param rx_data       Pointer to the deinterleaved 48-byte RX packet.
- * @param handles       Task handles for notification targets.
  * @return              1 if ACK should be transmitted, 0 otherwise.
  */
-int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles);
+int tc_process(const uint8_t *rx_data);

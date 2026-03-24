@@ -14,6 +14,10 @@
 
 #include <stdint.h>
 
+/* ---- Constants ---- */
+
+#define COMMS_PKT_SIZE 36  /* maximum packet size in bytes; actual length is variable */
+
 /* ---- Type definitions ---- */
 
 typedef enum {
@@ -24,8 +28,8 @@ typedef enum {
 } CommsState_t;
 
 typedef struct {
-    uint8_t RxData[48];
-    uint8_t TxData[48];
+    uint8_t RxData[COMMS_PKT_SIZE];
+    uint8_t TxData[COMMS_PKT_SIZE];
     uint8_t packetWindow;
 } CommsPackets_t;
 

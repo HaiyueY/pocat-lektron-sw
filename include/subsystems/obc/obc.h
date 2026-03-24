@@ -12,6 +12,10 @@
 #ifndef INC_OBC_H_
 #define INC_OBC_H_
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "state_machine.h"
+
 // TODO: revisar stack sizes y prioridades!
 
 // Task stack sizes
@@ -32,8 +36,19 @@
 #define ADCS_PRIORITY       1
 
 /**
- * @brief Communications task function, it runs the OBC state machine.
+ * @brief OBC task entry point — runs the OBC state machine.
  */
 void obc_task(void *pv_parameters);
+
+/** @name Subsystem task handle getters
+ *  Used by the TC handler to send notifications to the correct task.
+ *  Handles are valid once obc_task has finished setup_obc().
+ * @{ */
+TaskHandle_t obc_get_comms_handle(void);
+TaskHandle_t obc_get_eps_handle(void);
+TaskHandle_t obc_get_obdh_handle(void);
+TaskHandle_t obc_get_payload_handle(void);
+ObcState_t   obc_get_current_state(void);
+/** @} */
 
 #endif /* INC_OBC_H_ */

@@ -10,8 +10,13 @@
 
 /* ---- Includes ---- */
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "tc_handler.h"
 #include "notifications.h"
+#include "obc.h"
+#include "main.h"
+#include "time.h"
 
 /* ---- Private helpers ---- */
 
@@ -27,7 +32,7 @@ static inline void notify(TaskHandle_t handle, uint32_t bits)
 
 /* ---- Public functions ---- */
 
-int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
+int tc_process(const uint8_t *rx_data)
 {
     tc_id_t tc_id = (tc_id_t)rx_data[2];
     int ack = 0;
@@ -44,22 +49,22 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
 
     case TC_TRANSIT_TO_NM:
         ack = 1;
-        notify(handles->obc, N_OBC_EXIT_STATE_TO_NOMINAL);
+        notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_NOMINAL);
         break;
 
     case TC_TRANSIT_TO_CM:
         ack = 1;
-        notify(handles->obc, N_OBC_EXIT_STATE_TO_CONTINGENCY);
+        notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_CONTINGENCY);
         break;
 
     case TC_TRANSIT_TO_SSM:
         ack = 1;
-        notify(handles->obc, N_OBC_EXIT_STATE_TO_SUNSAFE);
+        notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_SUNSAFE);
         break;
 
     case TC_TRANSIT_TO_SM:
         ack = 1;
-        notify(handles->obc, N_OBC_EXIT_STATE_TO_SURVIVAL);
+        notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_SURVIVAL);
         break;
 
     /* ── SS Configuration ───────────────────────────────────────────────── */
@@ -87,7 +92,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * }
          */
         // TODO: save calibration in OBDH (ADCS_CONFIG_ADDR)
-        notify(handles->adcs, N_ADCS_NEW_CALIBRATION);
+        // TODO: notify ADCS task once it exists
         break;
 
     case TC_UPLOAD_ADCS_TLE:
@@ -109,7 +114,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * }
          */
         // TODO: save TLE in OBDH
-        notify(handles->adcs, N_ADCS_NEW_TLE);
+        // TODO: notify ADCS task once it exists
         break;
 
     case TC_UPLOAD_COMMS_CONFIG:
@@ -121,7 +126,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * Beacon_Flag = 1;
          */
         // TODO: save config in OBDH (COMMS_CONFIG_ADDR)
-        notify(handles->comms, N_COMMS_NEW_CONFIG);
+        notify(obc_get_comms_handle(), N_COMMS_NEW_CONFIG);
         break;
 
     case TC_UPLOAD_COMMS_PARAMS:
@@ -133,7 +138,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * Beacon_Flag = 1;
          */
         // TODO: save config in OBDH (COMMS_CONFIG_ADDR)
-        notify(handles->comms, N_COMMS_NEW_PARAMS);
+        notify(obc_get_comms_handle(), N_COMMS_NEW_PARAMS);
         break;
 
     case TC_UPLOAD_UNIX_TIME:
@@ -143,7 +148,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          *                 SET_RTC_TIME_ADDR, COMMSsender);
          */
         // TODO: save in OBDH?
-        notify(handles->obc, N_OBC_UPDATE_TIME);
+        notify(main_get_obc_handle(), N_OBC_UPDATE_TIME);
         break;
 
     case TC_UPLOAD_EPS_TH:
@@ -153,7 +158,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          *                 NOMINAL_TH_ADDR, COMMSsender);
          */
         // TODO: save thresholds in OBDH (*_TH_ADDR)
-        notify(handles->eps, N_EPS_NEW_THRESHOLDS);
+        notify(obc_get_eps_handle(), N_EPS_NEW_THRESHOLDS);
         break;
 
     case TC_UPLOAD_PL_CONFIG:
@@ -180,13 +185,13 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
     case TC_EPS_HEATER_ENABLE:
         ack = 1;
         // TODO: save in OBDH?
-        notify(handles->eps, N_EPS_ENABLE_AUTO_HEAT);
+        notify(obc_get_eps_handle(), N_EPS_ENABLE_AUTO_HEAT);
         break;
 
     case TC_EPS_HEATER_DISABLE:
         ack = 1;
         // TODO: save in OBDH?
-        notify(handles->eps, N_EPS_DISABLE_AUTO_HEAT);
+        notify(obc_get_eps_handle(), N_EPS_DISABLE_AUTO_HEAT);
         break;
 
     /* ── PoL up/down ────────────────────────────────────────────────────── */
@@ -227,17 +232,17 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
 
     case TC_CLEAR_PL_DATA:
         ack = 1;
-        notify(handles->obdh, N_OBDH_CLEAR_PAYLOAD);
+        notify(obc_get_obdh_handle(), N_OBDH_CLEAR_PAYLOAD);
         break;
 
     case TC_CLEAR_FLASH:
         ack = 1;
-        notify(handles->obdh, N_OBDH_CLEAR_FLASH);
+        notify(obc_get_obdh_handle(), N_OBDH_CLEAR_FLASH);
         break;
 
     case TC_CLEAR_HT:
         ack = 1;
-        notify(handles->obdh, N_OBDH_CLEAR_HT);
+        notify(obc_get_obdh_handle(), N_OBDH_CLEAR_HT);
         break;
 
     /* ── COMMS ──────────────────────────────────────────────────────────── */
@@ -248,7 +253,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * xTimerStop(xTimerBeacon, 0);
          * TXStopped_Flag = 1;
          */
-        notify(handles->comms, N_COMMS_STOP_RF);
+        notify(obc_get_comms_handle(), N_COMMS_STOP_RF);
         break;
 
     case TC_COMMS_RESUME_TX:
@@ -257,7 +262,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * xTimerStart(xTimerBeacon, 0);
          * TXStopped_Flag = 0;
          */
-        notify(handles->comms, N_COMMS_RESUME_RF);
+        notify(obc_get_comms_handle(), N_COMMS_RESUME_RF);
         break;
 
     case TC_COMMS_IT_DOWNLINK:
@@ -288,7 +293,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * Send_to_WFQueue(&tlc_data[20], 1, INTEGRATION_TIME_ADDR, COMMSsender);
          */
         // TODO: TBD — save config to OBDH, then activate
-        notify(handles->payload, N_PAYLOAD_ACTIVATE);
+        notify(obc_get_payload_handle(), N_PAYLOAD_ACTIVATE);
         break;
 
     case TC_PAYLOAD_DEACTIVATE:
@@ -297,7 +302,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
          * Beacon_Flag = 1;
          * GoTX_Flag = 1;
          */
-        notify(handles->payload, N_PAYLOAD_DEACTIVATE);
+        notify(obc_get_payload_handle(), N_PAYLOAD_DEACTIVATE);
         break;
 
     case TC_PAYLOAD_SEND_DATA:
@@ -315,7 +320,7 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
 
     case TC_OBC_HARD_REBOOT:
         ack = 1;
-        notify(handles->obc, N_OBC_HARD_REBOOT);
+        notify(main_get_obc_handle(), N_OBC_HARD_REBOOT);
         break;
 
     case TC_OBC_SOFT_REBOOT:
@@ -323,12 +328,12 @@ int tc_process(const uint8_t *rx_data, const tc_task_handles_t *handles)
         /* Reference processing:
          * HAL_NVIC_SystemReset();
          */
-        notify(handles->obc, N_OBC_SOFT_REBOOT);
+        notify(main_get_obc_handle(), N_OBC_SOFT_REBOOT);
         break;
 
     case TC_OBC_PERIPH_REBOOT:
         ack = 1;
-        notify(handles->obc, N_OBC_PERIPHERALS_REBOOT);
+        notify(main_get_obc_handle(), N_OBC_PERIPHERALS_REBOOT);
         break;
 
     case TC_OBC_DEBUG_MODE:
