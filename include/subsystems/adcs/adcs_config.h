@@ -60,11 +60,13 @@ extern "C" {
 #define MTQ_MAX_DIPOLE_Z    17.01e-4
 
 /** Magnetorquer coil parameters for dipole↔intensity conversion
- *  dipole = intensity * N * S  →  intensity = dipole / (N * S)
- *  Source: Sim_data_structure.m (Sx, Sy, Sz) */
-#define MTQ_COIL_FACTOR_X   (168.0 * 0.00018)  /**< N_x * S_x [turns·m²] */
-#define MTQ_COIL_FACTOR_Y   (152.0 * 0.00022)  /**< N_y * S_y [turns·m²] */
-#define MTQ_COIL_FACTOR_Z   (152.0 * 0.00022)  /**< N_z * S_z [turns·m²] */
+ *  dipole = intensity * coil_factor  →  intensity = dipole / coil_factor
+ *  Constraint: MTQ_MAX_DIPOLE = MTQ_MAX_INTENSITY_A × MTQ_COIL_FACTOR
+ *  Source: Sim_data_structure.m (Sx, Sy, Sz from spiral coil geometry)
+ *  See docs/adcs_detumble_high_rate_analysis.md §3 */
+#define MTQ_COIL_FACTOR_X   0.053156  /**< 17.01e-4 / 0.032 = Sx [turns·m²] */
+#define MTQ_COIL_FACTOR_Y   0.028656  /**<  9.17e-4 / 0.032 = Sy [turns·m²] */
+#define MTQ_COIL_FACTOR_Z   0.053156  /**< 17.01e-4 / 0.032 = Sz [turns·m²] */
 
 /** BD2606MVV driver current limits [mA] */
 #define MTQ_MIN_INTENSITY_MA    0.5
@@ -82,6 +84,36 @@ extern "C" {
 
 /** Number of consecutive stable steps required to exit detumbling */
 #define DETUMBLE_STABLE_COUNT       30
+
+/** Adaptive control period for detumbling (continuous optimal scheme)
+ *  See docs/adcs_detumble_high_rate_analysis.md §7.6 (Eq. 32)
+ *
+ *  ΔT(ω) = clamp( SNR_MIN / (SNR_COEFF × |ω|),  DT_FLOOR,  DT_CEIL )
+ *
+ *  SNR_COEFF = B₀ / (√2 × σ_mag)   — Eq. 24
+ *    B₀:     nominal geomagnetic field strength at orbital altitude
+ *    σ_mag:  magnetometer RMS noise (MAG_NOISE_RMS, defined below)
+ *    √2:     noise amplification from two-sample finite difference
+ *
+ *  This keeps the finite-difference dB/dt SNR ≥ SNR_MIN at all ω,
+ *  while the resulting phase lag δ = ωΔT/2 stays negligibly small
+ *  (see Eq. 31: ωΔT = SNR_MIN/SNR_COEFF ≈ 5.66e-3 rad ≈ 0.3°).
+ */
+#define DETUMBLE_B0_NOMINAL     3.0e-5  /**< Geomagnetic field at 400 km polar orbit [T] */
+#define DETUMBLE_SNR_MIN        3.0     /**< Minimum dB/dt SNR for reliable sign detection */
+#define DETUMBLE_DT_FLOOR       0.1     /**< Minimum control period [s] (10 Hz, §7.10.3) */
+#define DETUMBLE_DT_CEIL        1.0     /**< Safety upper bound near exit threshold [s] */
+
+/** Dead-time per control cycle [s]: MTQ off + I2C mag/gyro reads + compute.
+ *  During this window the magnetorquer is not generating torque.
+ *  See docs/adcs_detumble_high_rate_analysis.md §7.10.1              */
+#define DETUMBLE_DEAD_TIME_S    0.0035  /**< ~3.5 ms (MTQ settle 20µs + I2C 2.5ms + margin) */
+
+/** SNR scaling coefficient: SNR = SNR_COEFF × ω × ΔT   (Eq. 24)
+ *  Derived from B₀ and σ_mag — NOT a magic number.
+ *  = DETUMBLE_B0_NOMINAL / (√2 × MAG_NOISE_RMS)
+ *  = 3.0e-5 / (1.41421356 × 4.0e-8) ≈ 530.3  */
+#define DETUMBLE_SNR_COEFF      (DETUMBLE_B0_NOMINAL / (1.41421356 * MAG_NOISE_RMS))
 
 /* =========================================================================
  * Nadir Pointing Mode Parameters

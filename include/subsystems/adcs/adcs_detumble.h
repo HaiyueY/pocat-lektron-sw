@@ -28,6 +28,18 @@ extern "C" {
 void detumble_init(adcs_state_t *state);
 
 /**
+ * @brief Select the adaptive control period for detumbling.
+ *
+ * Two-tier scheme (see docs/adcs_detumble_high_rate_analysis.md §7.7):
+ *   |ω| > DETUMBLE_OMEGA_SWITCH → ΔT_fast (10 Hz, reduces phase lag)
+ *   |ω| ≤ DETUMBLE_OMEGA_SWITCH → ΔT_slow (1 Hz, maintains dB/dt SNR)
+ *
+ * @param[in] state  ADCS state (reads gyro angular velocity)
+ * @return Recommended control period ΔT [s]
+ */
+double detumble_select_dt(const adcs_state_t *state);
+
+/**
  * @brief Execute one detumbling control step.
  *
  * Algorithm (from Detumbling.m L119-184):

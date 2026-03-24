@@ -46,6 +46,27 @@ void detumble_init(adcs_state_t *state)
     state->step_count = 0;
 }
 
+double detumble_select_dt(const adcs_state_t *state)
+{
+    double omega = vec3d_norm(state->gyro.angular_vel);
+
+    /* Guard: if ω ≈ 0, use maximum period (avoid division by zero) */
+    if (omega < 1.0e-6) {
+        return DETUMBLE_DT_CEIL;
+    }
+
+    /* Eq. 32: ΔT = SNR_MIN / (SNR_COEFF × ω)
+     * where SNR_COEFF = B₀ / (√2 × σ_mag)  ≈ 530.3
+     * This keeps dB/dt SNR ≥ SNR_MIN at all angular velocities. */
+    double dt = DETUMBLE_SNR_MIN / (DETUMBLE_SNR_COEFF * omega);
+
+    /* Clamp to [DT_FLOOR, DT_CEIL] */
+    if (dt < DETUMBLE_DT_FLOOR) dt = DETUMBLE_DT_FLOOR;
+    if (dt > DETUMBLE_DT_CEIL)  dt = DETUMBLE_DT_CEIL;
+
+    return dt;
+}
+
 int detumble_step(adcs_state_t *state)
 {
     vec3d_t b_body = state->mag.field;
