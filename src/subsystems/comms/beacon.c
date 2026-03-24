@@ -7,6 +7,7 @@
 #include "obc.h"
 #include "tx_queue.h"
 #include "time.h"
+#include "temperature.h"
 
 
 /* ---- Module-level variables ---- */
@@ -64,8 +65,9 @@ void send_beacon(void)
     // Downlink ID
     beacon_pkt[5] = 0;
 
-    // Temperature MCU (dummy value for now)
-    beacon_pkt[6] = 0xFF; // -1 in two's complement
+    // Temperature MCU
+    // TODO: Verify calibration and scaling once ADC is set up. For now, just return raw value in degrees C (e.g. 25 = 25C).
+    beacon_pkt[6] = (uint8_t)mcu_get_temperature();
 
     // Temperature BATT (dummy value for now)
     beacon_pkt[7] = 0xFF; // -1 in two's complement
@@ -73,8 +75,9 @@ void send_beacon(void)
     // OBC state
     beacon_pkt[8] = obc_get_current_state();
 
-    // Battery voltage (dummy value for now)
-    beacon_pkt[9] = 0xFF; // 25.5V in
+    // MCU supply voltage (Vdda) in units of 0.1V (e.g. 33 = 3.3V)
+    // TODO: Get actual battery voltage once ADC is set up and calibrated
+    beacon_pkt[9] = (uint8_t)(mcu_get_vdda_mv() / 100);
 
     // Battery Amp (dummy value for now)
     beacon_pkt[10] = 0xFF; // -1 in two's complement

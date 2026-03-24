@@ -38,6 +38,7 @@ static void MX_SPI2_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_RTC_Init(void);
+static void MX_ADC1_Init(void);
 
 /**
  * @brief Main function
@@ -62,6 +63,7 @@ int main(void)
   MX_IWDG_Init();
   MX_USART2_UART_Init();
   MX_RTC_Init();
+  MX_ADC1_Init();
 
   log_init();
 
@@ -416,6 +418,42 @@ static void MX_RTC_Init(void)
     Error_Handler();
   }
 
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @details Configures ADC1 for reading the internal temperature sensor.
+  * - 12-bit resolution
+  * - Single conversion mode
+  * - Software trigger
+  * - Internal temperature sensor channel (ADC_CHANNEL_TEMPSENSOR)
+  */
+static void MX_ADC1_Init(void)
+{
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  hadc1.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
