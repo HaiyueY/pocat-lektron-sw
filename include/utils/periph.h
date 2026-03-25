@@ -31,3 +31,6 @@ extern IWDG_HandleTypeDef hiwdg;
 
 /** @brief Global RTC handle. */
 extern RTC_HandleTypeDef hrtc;
+
+/** @brief Global ADC1 handle. Used for internal temperature sensor. */
+extern ADC_HandleTypeDef hadc1;
