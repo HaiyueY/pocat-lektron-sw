@@ -121,35 +121,45 @@ extern "C" {
  *  = 3.0e-5 / (1.41421356 × 4.0e-8) ≈ 530.3  */
 #define DETUMBLE_SNR_COEFF      (DETUMBLE_B0_NOMINAL / (1.41421356 * MAG_NOISE_RMS))
 
-/** Proportional B-DOT gain with adaptive saturation
+/** Proportional B-DOT gain with per-axis saturation
  *  See docs/adcs_detumble_high_rate_analysis.md §9
  *
  *  Control law:  m_i = clamp( −k × dB_i/dt,  −m_max_i,  +m_max_i )
- *  Adaptive gain:  k = BDOT_GAIN_COEFF / ΔT
  *
- *  Derivation (orbit-averaged discrete stability):
- *    1. Magnetic torque: τ = k·(ω×B)×B = k·[B²ω − (ω·B)B]
- *    2. Orbit average:   I·dω/dt = −(2/3)·k·B₀²·ω
- *    3. Per-step ratio:  r = (2/3)·k·B₀²·ΔT/I  (must be < 1 for stability)
- *    4. Set r = λ:       k = λ·3I/(2B₀²·ΔT) = BDOT_GAIN_COEFF / ΔT
+ *  The gain k determines the saturation crossover angular velocity ω_sat:
+ *    k = m_max_ref / (ω_sat × B₀)
  *
- *  λ is the per-step angular velocity reduction fraction:
- *    λ = 0.5 → each step reduces |ω| by 50% on average
- *    λ = 1.0 → dead-beat (critically stable, fragile)
+ *  Physical interpretation:
+ *    ω > ω_sat: proportional output exceeds m_max → saturates → bang-bang
+ *    ω < ω_sat: proportional output < m_max → smooth torque ∝ ω
+ *
+ *  Derivation of ω_sat:
+ *    At ω_sat, the proportional command equals hardware limit:
+ *      k × |dB/dt| = m_max,  where |dB/dt| ≈ ω × B₀
+ *    Solving: ω_sat = m_max / (k × B₀), or equivalently k = m_max / (ω_sat × B₀)
+ *
+ *  Why proportional helps at low ω:
+ *    The B-DOT magnetic torque τ = m × B can only damp ω_perp (perpendicular
+ *    to B). The ω_parallel component is uncontrollable. With bang-bang (full
+ *    m_max), the cross-axis coupling in Euler's equations redistributes
+ *    energy chaotically between axes. With proportional (m ∝ ω), the torque
+ *    naturally reduces when damping is ineffective, avoiding energy redistribution.
  *
  *  At high ω: |k·dB/dt| > m_max → saturates → equivalent to bang-bang
  *  At low ω:  |k·dB/dt| < m_max → proportional → smooth convergence
+ *
+ *  Orbit-averaged stability check (proportional regime):
+ *    r = (2/3)·k·B₀²·ΔT/I → at ΔT=0.1s, k=1711: r=0.08% per step ≪ 1 ✓
  */
-#define BDOT_GAIN_LAMBDA    0.5     /**< Per-step damping ratio λ ∈ (0, 1] */
+#define BDOT_SAT_OMEGA  (20.0 * DEG_TO_RAD)  /**< Saturation crossover [rad/s] (tunable) */
 
-/** Average moment of inertia [kg·m²] = (Ixx + Iyy + Izz) / 3 */
-#define BDOT_I_AVG  ((SAT_INERTIA_XX + SAT_INERTIA_YY + SAT_INERTIA_ZZ) / 3.0)
+/** Reference maximum dipole — average of 3 axes [A·m²] */
+#define BDOT_M_MAX_REF  ((MTQ_MAX_DIPOLE_X + MTQ_MAX_DIPOLE_Y + MTQ_MAX_DIPOLE_Z) / 3.0)
 
-/** Proportional gain coefficient [kg·m²/T²]
- *  k(ΔT) = BDOT_GAIN_COEFF / ΔT  [A·m²·s/T]
- *  = λ × (3/2) × I_avg / B₀²  */
-#define BDOT_GAIN_COEFF     (BDOT_GAIN_LAMBDA * 1.5 * BDOT_I_AVG / \
-                             (DETUMBLE_B0_NOMINAL * DETUMBLE_B0_NOMINAL))
+/** Proportional B-DOT gain [A·m²·s/T]
+ *  k = m_max_ref / (ω_sat × B₀)
+ *  At ω_sat, per-axis proportional output ≈ m_max → saturation boundary. */
+#define BDOT_GAIN_K     (BDOT_M_MAX_REF / (BDOT_SAT_OMEGA * DETUMBLE_B0_NOMINAL))
 
 /* =========================================================================
  * Nadir Pointing Mode Parameters

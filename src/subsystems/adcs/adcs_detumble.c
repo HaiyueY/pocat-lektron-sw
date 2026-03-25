@@ -101,14 +101,13 @@ int detumble_step(adcs_state_t *state)
      * m_raw[i] = −k × dB_dt[i]
      * m[i]     = clamp(m_raw[i], −m_max[i], +m_max[i])
      *
-     * Adaptive gain: k = BDOT_GAIN_COEFF / ΔT
-     *   Derived from: k = λ × 3I / (2B₀²ΔT)  → per-step damping ratio = λ
+     * Fixed gain: k = BDOT_GAIN_K = m_max_ref / (ω_sat × B₀)
      *   At high ω: |k × dB/dt| > m_max → saturates → equivalent to bang-bang
      *   At low ω:  |k × dB/dt| < m_max → proportional → no overshoot
      *
      * Ref: CubeSatSimulation.m L137,166-170 (proportional variant)
      */
-    double k = BDOT_GAIN_COEFF / dt;
+    double k = BDOT_GAIN_K;
 
     vec3d_t desired_dipole;
     desired_dipole.x = -k * db_dt.x;
