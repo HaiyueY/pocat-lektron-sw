@@ -121,6 +121,36 @@ extern "C" {
  *  = 3.0e-5 / (1.41421356 × 4.0e-8) ≈ 530.3  */
 #define DETUMBLE_SNR_COEFF      (DETUMBLE_B0_NOMINAL / (1.41421356 * MAG_NOISE_RMS))
 
+/** Proportional B-DOT gain with adaptive saturation
+ *  See docs/adcs_detumble_high_rate_analysis.md §9
+ *
+ *  Control law:  m_i = clamp( −k × dB_i/dt,  −m_max_i,  +m_max_i )
+ *  Adaptive gain:  k = BDOT_GAIN_COEFF / ΔT
+ *
+ *  Derivation (orbit-averaged discrete stability):
+ *    1. Magnetic torque: τ = k·(ω×B)×B = k·[B²ω − (ω·B)B]
+ *    2. Orbit average:   I·dω/dt = −(2/3)·k·B₀²·ω
+ *    3. Per-step ratio:  r = (2/3)·k·B₀²·ΔT/I  (must be < 1 for stability)
+ *    4. Set r = λ:       k = λ·3I/(2B₀²·ΔT) = BDOT_GAIN_COEFF / ΔT
+ *
+ *  λ is the per-step angular velocity reduction fraction:
+ *    λ = 0.5 → each step reduces |ω| by 50% on average
+ *    λ = 1.0 → dead-beat (critically stable, fragile)
+ *
+ *  At high ω: |k·dB/dt| > m_max → saturates → equivalent to bang-bang
+ *  At low ω:  |k·dB/dt| < m_max → proportional → smooth convergence
+ */
+#define BDOT_GAIN_LAMBDA    0.5     /**< Per-step damping ratio λ ∈ (0, 1] */
+
+/** Average moment of inertia [kg·m²] = (Ixx + Iyy + Izz) / 3 */
+#define BDOT_I_AVG  ((SAT_INERTIA_XX + SAT_INERTIA_YY + SAT_INERTIA_ZZ) / 3.0)
+
+/** Proportional gain coefficient [kg·m²/T²]
+ *  k(ΔT) = BDOT_GAIN_COEFF / ΔT  [A·m²·s/T]
+ *  = λ × (3/2) × I_avg / B₀²  */
+#define BDOT_GAIN_COEFF     (BDOT_GAIN_LAMBDA * 1.5 * BDOT_I_AVG / \
+                             (DETUMBLE_B0_NOMINAL * DETUMBLE_B0_NOMINAL))
+
 /* =========================================================================
  * Nadir Pointing Mode Parameters
  * ====================================================================== */

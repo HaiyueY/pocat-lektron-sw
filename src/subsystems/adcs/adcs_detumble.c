@@ -1,14 +1,27 @@
 /**
  * @file adcs_detumble.c
- * @brief Sign-based B-DOT detumbling controller implementation.
+ * @brief Proportional B-DOT detumbling controller with adaptive saturation.
  *
  * Algorithm:
  *   1. Read magnetometer data → B_body (magnetic field in body frame)
  *   2. Compute time derivative: dB/dt = (B_body - B_body_prev) / dT
- *   3. Apply sign-based B-DOT law:
- *        moment[i] = -max_moment[i] * sign(dB_dt[i])
- *   4. Clamp and quantize intensity via mtq_compute_command()
- *   5. Check gyroscope: if |ω| < threshold for sustained period → done
+ *   3. Compute adaptive gain: k = BDOT_GAIN_COEFF / dT
+ *   4. Apply proportional B-DOT law with per-axis saturation:
+ *        m_raw[i] = -k * dB_dt[i]
+ *        m[i]     = clamp(m_raw[i], -m_max[i], +m_max[i])
+ *   5. Quantize intensity via mtq_compute_command()
+ *   6. Check gyroscope: if |ω| < threshold for sustained period → done
+ *
+ * At high angular velocity, |k × dB/dt| exceeds m_max and the law
+ * saturates — behaving identically to the sign-based bang-bang law.
+ * At low angular velocity, the output is proportional to dB/dt,
+ * avoiding the discrete-time overshoot that occurs when bang-bang
+ * torque impulse exceeds the current angular momentum.
+ *
+ * The gain k = BDOT_GAIN_COEFF / ΔT is derived from orbit-averaged
+ * discrete stability analysis (see docs/adcs_detumble_high_rate_analysis.md §9):
+ *   BDOT_GAIN_COEFF = λ × (3/2) × I_avg / B₀²
+ * where λ (BDOT_GAIN_LAMBDA) is the per-step damping ratio.
  *
  * MATLAB reference:
  *   ref/PoCat-Lektron-ADCS/ADCS/Detumbling.m
@@ -17,13 +30,9 @@
  *     L144-184:  Intensity quantization (0.5-32 mA, 0.5 mA step)
  *     L192-214:  Gyroscope readout for threshold check
  *
- *   ref/PoCat-Lektron-ADCS/ADCS/SimParameters/Sim_data_structure.m
- *     d.maxmoment = [17.01, 9.17, 17.01] × 10⁻⁴ A·m²  (from coil geometry)
- *
- * The sign-based law (rather than proportional k*dB/dt) is used because
- * it always commands the maximum available torque, which speeds up
- * convergence at the cost of precision — acceptable for detumbling where
- * the goal is to reduce ω below a threshold, not achieve fine pointing.
+ *   ref/PoCat-Lektron-ADCS/ADCS/utils/CubeSatSimulation.m
+ *     L137:      d.k = 10^-5   (proportional gain reference)
+ *     L166-170:  Proportional variant (commented out in MATLAB)
  */
 
 #include "adcs_detumble.h"
@@ -87,17 +96,35 @@ int detumble_step(adcs_state_t *state)
         db_dt.z = 1.0e-9;
     }
 
-    /* Step 2: Sign-based B-DOT law
-     * Ref: Detumbling.m L129-135
-     *   signmomx  = sign(magbodyderivative(1));
-     *   moment(1) = - d.maxmoment(1) * signmomx;
+    /* Step 2: Proportional B-DOT law with per-axis saturation
+     *
+     * m_raw[i] = −k × dB_dt[i]
+     * m[i]     = clamp(m_raw[i], −m_max[i], +m_max[i])
+     *
+     * Adaptive gain: k = BDOT_GAIN_COEFF / ΔT
+     *   Derived from: k = λ × 3I / (2B₀²ΔT)  → per-step damping ratio = λ
+     *   At high ω: |k × dB/dt| > m_max → saturates → equivalent to bang-bang
+     *   At low ω:  |k × dB/dt| < m_max → proportional → no overshoot
+     *
+     * Ref: CubeSatSimulation.m L137,166-170 (proportional variant)
      */
-    vec3d_t desired_dipole;
-    desired_dipole.x = -max_moment[0] * ((db_dt.x >= 0.0) ? 1.0 : -1.0);
-    desired_dipole.y = -max_moment[1] * ((db_dt.y >= 0.0) ? 1.0 : -1.0);
-    desired_dipole.z = -max_moment[2] * ((db_dt.z >= 0.0) ? 1.0 : -1.0);
+    double k = BDOT_GAIN_COEFF / dt;
 
-    /* Step 3: Clamp and quantize via MTQ driver
+    vec3d_t desired_dipole;
+    desired_dipole.x = -k * db_dt.x;
+    desired_dipole.y = -k * db_dt.y;
+    desired_dipole.z = -k * db_dt.z;
+
+    /* Per-axis saturation to hardware limits (also done inside
+     * mtq_compute_command, but explicit here for clarity) */
+    if (fabs(desired_dipole.x) > max_moment[0])
+        desired_dipole.x = (desired_dipole.x >= 0.0) ? max_moment[0] : -max_moment[0];
+    if (fabs(desired_dipole.y) > max_moment[1])
+        desired_dipole.y = (desired_dipole.y >= 0.0) ? max_moment[1] : -max_moment[1];
+    if (fabs(desired_dipole.z) > max_moment[2])
+        desired_dipole.z = (desired_dipole.z >= 0.0) ? max_moment[2] : -max_moment[2];
+
+    /* Step 3: Quantize intensity via MTQ driver
      * Ref: Detumbling.m L144-184 */
     mtq_compute_command(desired_dipole, &state->mtq_cmd);
 

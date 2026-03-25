@@ -1,10 +1,13 @@
 /**
  * @file adcs_detumble.h
- * @brief B-DOT detumbling controller.
+ * @brief Proportional B-DOT detumbling controller with adaptive saturation.
  *
- * Implements the sign-based B-DOT law for satellite detumbling after
- * deployment or perturbation. Uses the maximum magnetic moment and the
- * sign of the magnetic field derivative to generate control commands.
+ * Implements the proportional B-DOT law for satellite detumbling:
+ *   m[i] = clamp(-k × dB[i]/dt, -m_max[i], +m_max[i])
+ *
+ * The adaptive gain k = BDOT_GAIN_COEFF / ΔT is derived from orbit-averaged
+ * discrete stability analysis. At high ω the law saturates (bang-bang
+ * equivalent); at low ω it provides smooth proportional convergence.
  *
  * MATLAB reference: ref/PoCat-Lektron-ADCS/ADCS/Detumbling.m
  */
@@ -42,11 +45,12 @@ double detumble_select_dt(const adcs_state_t *state);
 /**
  * @brief Execute one detumbling control step.
  *
- * Algorithm (from Detumbling.m L119-184):
+ * Proportional B-DOT with per-axis saturation:
  *   1. Compute dB/dt = (B_body - B_body_prev) / dT
- *   2. moment[i] = -max_moment[i] * sign(dB_dt[i])
- *   3. Clamp and quantize intensity via mtq_compute_command()
- *   4. Check angular velocity threshold for exit condition
+ *   2. k = BDOT_GAIN_COEFF / dT  (adaptive gain)
+ *   3. m_raw[i] = -k * dB_dt[i]; m[i] = clamp(m_raw, ±m_max)
+ *   4. Quantize intensity via mtq_compute_command()
+ *   5. Check angular velocity threshold for exit condition
  *
  * @param[in,out] state  ADCS state (reads mag/gyro, writes mtq_cmd)
  * @return 1 if detumbling is complete (ω below threshold), 0 otherwise
