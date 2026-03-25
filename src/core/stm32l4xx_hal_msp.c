@@ -371,4 +371,20 @@ void HAL_RTC_MspDeInit(RTC_HandleTypeDef* hrtc)
   }
 }
 
+void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
+{
+  if(hadc->Instance==ADC1)
+  {
+    __HAL_RCC_ADC_CLK_ENABLE();
+  }
+}
+
+void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
+{
+  if(hadc->Instance==ADC1)
+  {
+    __HAL_RCC_ADC_CLK_DISABLE();
+  }
+}
+
 /* USER CODE END 1 */
