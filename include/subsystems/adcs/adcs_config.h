@@ -158,7 +158,8 @@ extern "C" {
 
 /** Proportional B-DOT gain [A·m²·s/T]
  *  k = m_max_ref / (ω_sat × B₀)
- *  At ω_sat, per-axis proportional output ≈ m_max → saturation boundary. */
+ *  At ω_sat, per-axis proportional output ≈ m_max → saturation boundary. 
+ *  Currently, its around 1.283 * 10^3 A·m²·s/T*/
 #define BDOT_GAIN_K     (BDOT_M_MAX_REF / (BDOT_SAT_OMEGA * DETUMBLE_B0_NOMINAL))
 
 /* =========================================================================
