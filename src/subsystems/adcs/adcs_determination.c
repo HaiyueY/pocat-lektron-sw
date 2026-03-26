@@ -149,6 +149,19 @@ void determination_update(adcs_state_t *state)
     mat3d_t rot;
     triad_compute(ref_primary, ref_secondary, body_primary, body_secondary, &rot);
 
-    /* Convert to quaternion (Shepperd's method) */
-    state->q_eci_body = quat_from_matrix(rot);
+    /* Convert to quaternion (Shepperd's method).
+     *
+     * TRIAD builds R = M_ref × M_body^T = R_body_to_ECI
+     * (verified: R × v_body = v_ECI for the primary/secondary vector pairs).
+     * quat_from_matrix(R_body_to_ECI) therefore returns q_body_to_ECI.
+     *
+     * The nadir controller's error quaternion expects q_ECI_to_body
+     * (see adcs_nadir.c L67-76 and Nadir_pointing.m L156:
+     *  q_err = q_target ⊗ conj(q_eci_body), which equals
+     *  q_desired ⊗ q_actual^{-1} only when q_eci_body = q_ECI_to_body).
+     *
+     * Conjugating converts q_body_to_ECI → q_ECI_to_body.
+     *
+     * See docs/adcs_nadir_triad_convention_analysis.md for full derivation. */
+    state->q_eci_body = quat_conjugate(quat_from_matrix(rot));
 }
