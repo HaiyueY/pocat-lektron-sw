@@ -91,40 +91,24 @@ extern "C" {
 /** Number of consecutive stable steps required to exit detumbling */
 #define DETUMBLE_STABLE_COUNT       30
 
-/** Adaptive control period for detumbling (continuous optimal scheme)
- *  See docs/adcs_detumble_high_rate_analysis.md §7.6 (Eq. 32)
- *
- *  ΔT(ω) = clamp( SNR_MIN / (SNR_COEFF × |ω|),  DT_FLOOR,  DT_CEIL )
- *
- *  SNR_COEFF = B₀ / (√2 × σ_mag)   — Eq. 24
- *    B₀:     nominal geomagnetic field strength at orbital altitude
- *    σ_mag:  magnetometer RMS noise (MAG_NOISE_RMS, defined below)
- *    √2:     noise amplification from two-sample finite difference
- *
- *  This keeps the finite-difference dB/dt SNR ≥ SNR_MIN at all ω,
- *  while the resulting phase lag δ = ωΔT/2 stays negligibly small
- *  (see Eq. 31: ωΔT = SNR_MIN/SNR_COEFF ≈ 5.66e-3 rad ≈ 0.3°).
- */
-#define DETUMBLE_B0_NOMINAL     3.0e-5  /**< Geomagnetic field at 400 km polar orbit [T] */
-#define DETUMBLE_SNR_MIN        3.0     /**< Minimum dB/dt SNR for reliable sign detection */
-#define DETUMBLE_DT_FLOOR       0.1     /**< Minimum control period [s] (10 Hz, §7.10.3) */
-#define DETUMBLE_DT_CEIL        1.0     /**< Safety upper bound near exit threshold [s] */
+/** Detumbling control period [s]
+ *  Fixed at 1 Hz — per ESA 4× Nyquist rule for 90°/s max tumble.
+ *  The ω×B law uses instantaneous gyro data (no finite-difference),
+ *  so adaptive ΔT for SNR is no longer required.                    */
+#define DETUMBLE_CONTROL_DT     ADCS_CONTROL_DT  /**< 1.0 s (1 Hz) */
 
 /** Dead-time per control cycle [s]: MTQ off + I2C mag/gyro reads + compute.
  *  During this window the magnetorquer is not generating torque.
  *  See docs/adcs_detumble_high_rate_analysis.md §7.10.1              */
 #define DETUMBLE_DEAD_TIME_S    0.0035  /**< ~3.5 ms (MTQ settle 20µs + I2C 2.5ms + margin) */
 
-/** SNR scaling coefficient: SNR = SNR_COEFF × ω × ΔT   (Eq. 24)
- *  Derived from B₀ and σ_mag — NOT a magic number.
- *  = DETUMBLE_B0_NOMINAL / (√2 × MAG_NOISE_RMS)
- *  = 3.0e-5 / (1.41421356 × 4.0e-8) ≈ 530.3  */
-#define DETUMBLE_SNR_COEFF      (DETUMBLE_B0_NOMINAL / (1.41421356 * MAG_NOISE_RMS))
+/** Nominal geomagnetic field strength at orbital altitude [T] */
+#define DETUMBLE_B0_NOMINAL     3.0e-5
 
-/** Proportional B-DOT gain with per-axis saturation
+/** Proportional ω×B gain with per-axis saturation
  *  See docs/adcs_detumble_high_rate_analysis.md §9
  *
- *  Control law:  m_i = clamp( −k × dB_i/dt,  −m_max_i,  +m_max_i )
+ *  Control law:  m_i = clamp( k × (ω × B)_i,  −m_max_i,  +m_max_i )
  *
  *  The gain k determines the saturation crossover angular velocity ω_sat:
  *    k = m_max_ref / (ω_sat × B₀)
@@ -133,33 +117,21 @@ extern "C" {
  *    ω > ω_sat: proportional output exceeds m_max → saturates → bang-bang
  *    ω < ω_sat: proportional output < m_max → smooth torque ∝ ω
  *
- *  Derivation of ω_sat:
- *    At ω_sat, the proportional command equals hardware limit:
- *      k × |dB/dt| = m_max,  where |dB/dt| ≈ ω × B₀
- *    Solving: ω_sat = m_max / (k × B₀), or equivalently k = m_max / (ω_sat × B₀)
- *
  *  Why proportional helps at low ω:
- *    The B-DOT magnetic torque τ = m × B can only damp ω_perp (perpendicular
- *    to B). The ω_parallel component is uncontrollable. With bang-bang (full
- *    m_max), the cross-axis coupling in Euler's equations redistributes
- *    energy chaotically between axes. With proportional (m ∝ ω), the torque
- *    naturally reduces when damping is ineffective, avoiding energy redistribution.
- *
- *  At high ω: |k·dB/dt| > m_max → saturates → equivalent to bang-bang
- *  At low ω:  |k·dB/dt| < m_max → proportional → smooth convergence
- *
- *  Orbit-averaged stability check (proportional regime):
- *    r = (2/3)·k·B₀²·ΔT/I → at ΔT=0.1s, k=1711: r=0.08% per step ≪ 1 ✓
+ *    The magnetic torque τ = m × B can only damp ω_perp (perpendicular
+ *    to B). With bang-bang (full m_max), cross-axis coupling redistributes
+ *    energy chaotically. With proportional (m ∝ ω), the torque naturally
+ *    reduces when damping is ineffective, avoiding energy redistribution.
  */
 #define BDOT_SAT_OMEGA  (20.0 * DEG_TO_RAD)  /**< Saturation crossover [rad/s] (tunable) */
 
 /** Reference maximum dipole — average of 3 axes [A·m²] */
 #define BDOT_M_MAX_REF  ((MTQ_MAX_DIPOLE_X + MTQ_MAX_DIPOLE_Y + MTQ_MAX_DIPOLE_Z) / 3.0)
 
-/** Proportional B-DOT gain [A·m²·s/T]
+/** Proportional ω×B gain [A·m²·s/T]
  *  k = m_max_ref / (ω_sat × B₀)
- *  At ω_sat, per-axis proportional output ≈ m_max → saturation boundary. 
- *  Currently, its around 1.283 * 10^3 A·m²·s/T*/
+ *  At ω_sat, per-axis proportional output ≈ m_max → saturation boundary.
+ *  Currently ≈ 1283 A·m²·s/T */
 #define BDOT_GAIN_K     (BDOT_M_MAX_REF / (BDOT_SAT_OMEGA * DETUMBLE_B0_NOMINAL))
 
 /* =========================================================================
