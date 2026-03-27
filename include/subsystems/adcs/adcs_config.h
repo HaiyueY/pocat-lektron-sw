@@ -91,11 +91,16 @@ extern "C" {
 /** Number of consecutive stable steps required to exit detumbling */
 #define DETUMBLE_STABLE_COUNT       30
 
-/** Detumbling control period [s]
- *  Fixed at 1 Hz — per ESA 4× Nyquist rule for 90°/s max tumble.
- *  The ω×B law uses instantaneous gyro data (no finite-difference),
- *  so adaptive ΔT for SNR is no longer required.                    */
-#define DETUMBLE_CONTROL_DT     ADCS_CONTROL_DT  /**< 1.0 s (1 Hz) */
+/** Detumbling control period bounds [s]
+ *
+ *  Adaptive ΔT based on ESA 4× Nyquist rule:
+ *    f_ctrl = 4 × f_rot = 2|ω|/π   →   ΔT = π / (2|ω|)
+ *    clamped to [DT_MIN, DT_MAX]
+ *
+ *  At 90°/s: ΔT = 1.0 s (1 Hz).  At 45°/s: ΔT = 2.0 s (0.5 Hz).
+ *  This maintains constant ZOH efficiency G = sinc(π/4) ≈ 0.900.   */
+#define DETUMBLE_DT_MIN     1.0   /**< Max control freq 1 Hz (at ω ≥ 90°/s) */
+#define DETUMBLE_DT_MAX     2.0   /**< Min control freq 0.5 Hz (at ω ≤ 45°/s) */
 
 /** Dead-time per control cycle [s]: MTQ off + I2C mag/gyro reads + compute.
  *  During this window the magnetorquer is not generating torque.

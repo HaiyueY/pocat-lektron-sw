@@ -19,6 +19,8 @@
  *
  * This allows reliable detumbling at 1 Hz control rate for initial
  * angular velocities up to 90°/s (per ESA 4× Nyquist rule).
+ * The control frequency adapts to the current angular velocity:
+ *   f_ctrl = 4 × f_rot = 2|ω|/π, clamped to [0.5 Hz, 1 Hz].
  *
  * At high angular velocity, |k × (ω × B)| exceeds m_max and the law
  * saturates — behaving identically to the sign-based bang-bang law.
@@ -56,8 +58,19 @@ void detumble_init(adcs_state_t *state)
 
 double detumble_select_dt(const adcs_state_t *state)
 {
-    (void)state;
-    return ADCS_CONTROL_DT;
+    /* ESA 4× Nyquist rule: f_ctrl = 4 × f_rot = 2|ω|/π
+     * → ΔT = π / (2|ω|), clamped to [DT_MIN, DT_MAX].
+     * Maintains constant ZOH efficiency G = sinc(π/4) ≈ 0.900. */
+    double omega_mag = vec3d_norm(state->gyro.angular_vel);
+
+    if (omega_mag < 1e-6)
+        return DETUMBLE_DT_MAX;
+
+    double dt = M_PI / (2.0 * omega_mag);
+
+    if (dt < DETUMBLE_DT_MIN) dt = DETUMBLE_DT_MIN;
+    if (dt > DETUMBLE_DT_MAX) dt = DETUMBLE_DT_MAX;
+    return dt;
 }
 
 int detumble_step(adcs_state_t *state)

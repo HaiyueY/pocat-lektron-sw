@@ -32,14 +32,16 @@ extern "C" {
 void detumble_init(adcs_state_t *state);
 
 /**
- * @brief Get the fixed control period for detumbling.
+ * @brief Select adaptive control period for detumbling.
  *
- * Returns 1.0 s (1 Hz), per ESA 4× Nyquist rule for 90°/s max tumble.
- * The ω×B law eliminates finite-difference SNR concerns, so adaptive
- * ΔT is no longer needed.
+ * Follows ESA 4× Nyquist rule: f_ctrl = 4 × f_rot = 2|ω|/π.
+ * Returns ΔT = π/(2|ω|), clamped to [1.0 s, 2.0 s] (0.5–1 Hz).
  *
- * @param[in] state  ADCS state (unused, kept for API compatibility)
- * @return Control period ΔT = 1.0 s
+ * This maintains constant ZOH efficiency G = sinc(π/4) ≈ 0.900,
+ * reducing control frequency at low ω to save power.
+ *
+ * @param[in] state  ADCS state (reads gyro angular velocity)
+ * @return Control period ΔT ∈ [1.0, 2.0] s
  */
 double detumble_select_dt(const adcs_state_t *state);
 
