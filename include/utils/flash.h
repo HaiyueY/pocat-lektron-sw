@@ -103,6 +103,7 @@
 
 
 //EPS
+#define EPS_THRESHOLDS_ADDR			0x08030800 // 4 bytes (1 byte per threshold)
 #define NOMINAL_TH_ADDR             0x08030800  // 1
 #define CONTINGENCY_TH_ADDR         0x08030801  // 1
 #define SUNSAFE_TH_ADDR             0x08030802  // 1

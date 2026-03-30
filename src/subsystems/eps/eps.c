@@ -14,6 +14,8 @@
 #include "eps.h"
 #include <stdio.h>
 #include "health.h"
+#include "flash.h"
+#include "notifications.h"
 
 // The main functionality of the EPS task is providing the OBC with battery readings on 
 // it's voltage, current generated, capacity, temperature and charging status. The task 
@@ -47,7 +49,8 @@ static void process_eps(void)
 
     // printf("Processing EPS...\n");
     // 1. Checks EPS notifications (DOESN'T BLOCK) to see whether to perform notification actions
-            
+    eps_process_notifications();
+
     // If there are actions to be taken, process them accordingly.
 
     // 2. Poll battery sensor (DS2782E+) for voltage, current and capacity. This IC is 
@@ -55,4 +58,30 @@ static void process_eps(void)
 
     // 3. Send to OBDH task for it to store to flash 
 
+    // 4. Update EPS Event Group bits with the current battery conditions 
+
+}
+
+static void eps_process_notifications(void)
+{
+    uint32_t notifications = 0;
+    xTaskNotifyWait(0, UINT32_MAX, &notifications, 0);
+    if (notifications & N_EPS_NEW_THRESHOLDS) {
+        uint8_t thresholds[3];
+        OBDH_Read_Request(EPS_THRESHOLDS_ADDR, thresholds, 3);
+        // Thresholds are now in the thresholds array, in the order: 
+        // thresholds[0]: nominal
+        // thresholds[1]: contingency
+        // thresholds[2]: sunsafe
+    }
+
+    if (notifications & N_EPS_ENABLE_AUTO_HEAT) {
+        // TODO: TBD — enable EPS heater
+    }
+
+    if (notifications & N_EPS_DISABLE_AUTO_HEAT) {
+        // TODO: TBD — disable EPS heater
+    }
+
+    // Process other notifications as needed
 }

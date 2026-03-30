@@ -17,6 +17,7 @@
 #include "obc.h"
 #include "main.h"
 #include "time.h"
+#include "flash.h"
 
 /* ---- Private helpers ---- */
 
@@ -143,22 +144,14 @@ int tc_process(const uint8_t *rx_data)
 
     case TC_UPLOAD_UNIX_TIME:
         ack = 1;
-        /* Reference processing:
-         * Send_to_WFQueue((uint8_t*) tlc_data[3], 4,
-         *                 SET_RTC_TIME_ADDR, COMMSsender);
-         */
-        // TODO: save in OBDH?
-        notify(main_get_obc_handle(), N_OBC_UPDATE_TIME);
         time_set_unix((rx_data[3] << 24) | (rx_data[4] << 16) | (rx_data[5] << 8) | rx_data[6]);
+        // OBC task is notified that the time has been updated, in case it needs to trigger time-dependent actions
+        notify(main_get_obc_handle(), N_OBC_UPDATE_TIME);  
         break;
 
     case TC_UPLOAD_EPS_TH:
         ack = 1;
-        /* Reference processing:
-         * Send_to_WFQueue((uint8_t*) tlc_data[3], 4,
-         *                 NOMINAL_TH_ADDR, COMMSsender);
-         */
-        // TODO: save thresholds in OBDH (*_TH_ADDR)
+        OBDH_Write_Request(EPS_THRESHOLDS_ADDR, &rx_data[3], 3); // write all 3 thresholds at once
         notify(obc_get_eps_handle(), N_EPS_NEW_THRESHOLDS);
         break;
 
