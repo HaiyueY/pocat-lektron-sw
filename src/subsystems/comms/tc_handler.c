@@ -178,13 +178,11 @@ int tc_process(const uint8_t *rx_data)
 
     case TC_EPS_HEATER_ENABLE:
         ack = 1;
-        // TODO: save in OBDH?
         notify(obc_get_eps_handle(), N_EPS_ENABLE_AUTO_HEAT);
         break;
 
     case TC_EPS_HEATER_DISABLE:
         ack = 1;
-        // TODO: save in OBDH?
         notify(obc_get_eps_handle(), N_EPS_DISABLE_AUTO_HEAT);
         break;
 

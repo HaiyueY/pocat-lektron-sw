@@ -24,6 +24,7 @@
 // Function prototypes
 static void setup_eps(void);
 static void process_eps(void);
+static void eps_process_notifications(void);
 
 void eps_task(void *pv_parameters)
 {
@@ -77,6 +78,7 @@ static void eps_process_notifications(void)
 
     if (notifications & N_EPS_ENABLE_AUTO_HEAT) {
         // TODO: TBD — enable EPS heater
+        // Save configuration in OBDH if needed?
     }
 
     if (notifications & N_EPS_DISABLE_AUTO_HEAT) {
