@@ -19,9 +19,10 @@
 /* ---- Macros and constants ---- */
 
 #define TX_OUTPUT_POWER                     18        // dBm
+#define TX_POST_TX_GUARD_MS                 100       // TODO: have to test
 
 #define LORA_BANDWIDTH                      0         // [0: 125 kHz, 1: 250 kHz, 2: 500 kHz, 3: Reserved]
-#define LORA_PREAMBLE_LENGTH                8//108    // Same for Tx and Rx
+#define LORA_PREAMBLE_LENGTH                20        // Must be > 2×CAD symbols for reliable CAD→RX. GS must match.
 #define LORA_SYMBOL_TIMEOUT                 100       // Symbols
 #define LORA_FIX_LENGTH_PAYLOAD_ON          0
 #define LORA_IQ_INVERSION                   0         // 0 = off, 1 = on
@@ -49,7 +50,7 @@ static CommsPackets_t CommsPackets = {
 };
 
 static CommsFlags_t CommsFlags = {
-    .cadMode = 1, // set to 0 in original code
+    .rxMode = RX_MODE_DUTY_CYCLE,
     .cadRx = 0,
     .callbackFinished = 0,
     // .txAck = 0, legacy. ACK's should be enqueued in tx_queue
@@ -140,16 +141,8 @@ void process_comms(void)
     // if N_COMMS_STOP_RF           Stop RF transmission
     // if N_COMMS_RESUME_RF         Resume RF transmission
 
-    uint32_t notif = 0;
-    xTaskNotifyWait(0, N_COMMS_TRANSMIT_BEACON, &notif, 0);
-
-    if (notif & N_COMMS_TRANSMIT_BEACON) {
-        send_beacon();
-        CommsState = TRANSMIT;
-    }
-
     switch(CommsState)
-    {   
+    {
         case SLEEP:
             state_sleep(); break;
 
@@ -159,100 +152,70 @@ void process_comms(void)
         case TRANSMIT:
             state_transmit(); break;
     }
+
+    uint32_t notif = 0;
+    xTaskNotifyWait(0, N_COMMS_TRANSMIT_BEACON, &notif, 0);
+
+    if (notif & N_COMMS_TRANSMIT_BEACON) {
+        send_beacon();
+        if (CommsState == SLEEP) {
+            CommsState = TRANSMIT;
+        }
+    }
+
 }
 
 
 void state_sleep(void)
 {
-    // Implemented simple receiving mechanism for now...
     uint16_t rx_len  = 0;
     int16_t  rx_rssi = 0;
     int8_t   rx_snr  = 0;
+    int16_t  ret;
 
-    int16_t ret = RadioLib_Receive(CommsSettings.rxTime,
+    switch (CommsFlags.rxMode) {
+        case RX_MODE_CAD:
+            ret = RadioLib_CadReceive(CommsSettings.rxTime,   /* CAD scanning budget  . TODO: review*/
+                                      CommsSettings.rxTime,   /* RX timeout after CAD */
+                                      CommsPackets.RxData, COMMS_PKT_SIZE,
+                                      &rx_len, &rx_rssi, &rx_snr);
+            break;
+        case RX_MODE_DUTY_CYCLE:
+            ret = RadioLib_DutyCycleReceive(CommsSettings.rxTime, LORA_PREAMBLE_LENGTH,
+                                            CommsPackets.RxData, COMMS_PKT_SIZE,
+                                            &rx_len, &rx_rssi, &rx_snr);
+            break;
+        default: 
+            ret = RadioLib_Receive(CommsSettings.rxTime,
                                    CommsPackets.RxData, COMMS_PKT_SIZE,
                                    &rx_len, &rx_rssi, &rx_snr);
+            break;
+    }
 
-    if (ret != 0) { return; } /* Timeout or radio error — stay in SLEEP */
+    if (ret != 0) { return; }
 
     Deinterleave(CommsPackets.RxData, (int)rx_len);
 
     /* TODO: Validate that the packet is ours and is correct */
-    
+
     CommsState = PROCESS;
-
-    //RadioLib_Sleep();
-    //vTaskDelay(pdMS_TO_TICKS(CommsSettings.sleepTime));
-
-    // TODO:
-    // Receive in CAD mode blocking until timeout or reception, 
-    // if timeout -> stay in sleep, 
-    // if reception -> save packet in memory and change state to process
-    
-    // Reference:
-    // if (CommsFlags.cadMode) {
-
-    //     if (CommsFlags.cadRx) {
-    //         // CAD detecta si hi ha activitat
-    //         CommsFlags.cadRx = 0;
-    //         RadioLib_Rx(CommsSettings.rxTime);
-    //     } else {
-    //         // Fem CAD real (scanChannel)
-    //         RadioLib_StartCad();
-    //     }
-
-    // } else {
-    //     // Sense CAD: recepció directa
-    //     RadioLib_Rx(CommsSettings.rxTime);
-    // }
-
-    // memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
-    // memcpy(CommsPackets.RxData, payload, size);
-    // Deinterleave(CommsPackets.RxData,size);
-
-    // // ??
-    // // RssiValue = rssi; 
-    // // SnrValue = snr;
-    
-    // //??
-    // //RssiMoy = (((RssiMoy*RxCorrectCnt)+RssiValue)/(RxCorrectCnt+1));
-    // //SnrMoy = (((SnrMoy*RxCorrectCnt)+SnrValue)/(RxCorrectCnt+1));
-
-    // // ??
-    // //xEventGroupSetBits(xEventGroup, COMMS_RXIRQFlag_EVENT);
-    // if (CommsPackets.RxData[0]==0xC8 && CommsPackets.RxData[1]==0x9D)
-    // {
-    //     int ack = tc_process(CommsPackets.RxData, &tc_handles);
-    //     if (ack) {
-    //         CommsFlags.txAck = 1;
-    //         CommsState = TRANSMIT;
-    //     } else {
-    //         CommsState = SLEEP;
-    //     }
-    // }
-    // else
-    // {
-	// 	// COMMSNotUs++;
-	// 	memset(CommsPackets.RxData,0,sizeof(CommsPackets.RxData));
-    //     RadioLib_Standby();
-	// 	CommsState = STANDBY;
-    // }
 }
 
 void state_process(void)
 {
 
     if (CommsPackets.RxData[5] == ACK_M) {
-        /* Ground acknowledged our last downlink — remove the head of the TX queue */
-        txq_dequeue();
+        TxQueueEntry_t *head = txq_peek();
+        if (head != NULL && head->stop_and_wait) {
+            txq_dequeue();
+        }
     } else {
-        /* Telecommand received — dispatch it */
-        uint8_t tc_id = CommsPackets.RxData[2]; /* save before tc_process may clear RxData */
+        uint8_t tc_id = CommsPackets.RxData[2];
         int need_ack = tc_process(CommsPackets.RxData);
         if (need_ack) {
             uint8_t ack_pkt[COMMS_PKT_SIZE] = {0};
-            ack_pkt[0] = 0xC8;   // header required by GS OnRxDone 
-            ack_pkt[1] = 0x9D;   // header required by GS OnRxDone 
+            ack_pkt[0] = 0xC8;   
+            ack_pkt[1] = 0x9D;   
             ack_pkt[2] = tc_id;  // TC id so that GS knows what is being ACKed
             ack_pkt[3] = 0;
             ack_pkt[4] = 0;
@@ -281,16 +244,15 @@ void state_transmit(void)
     Interleave(tx_buf, entry->length);
     RadioLib_Transmit(tx_buf, (uint16_t)entry->length);
 
-    if (entry->is_ack) {
-        /* ACKs are fire-and-forget — dequeue immediately, no GS acknowledgement expected */
-        txq_dequeue();
-        CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
-    } else if (entry->stop_and_wait) {
-        /* Leave the entry in the queue; wait for ACK in the next PROCESS cycle */
+    if (entry->stop_and_wait) {
         CommsState = SLEEP;
     } else {
         txq_dequeue();
-        CommsState = txq_is_empty() ? SLEEP : TRANSMIT;
+        int queue_empty = txq_is_empty();
+        if (!queue_empty) {
+            vTaskDelay(pdMS_TO_TICKS(TX_POST_TX_GUARD_MS));
+        }
+        CommsState = queue_empty ? SLEEP : TRANSMIT;
     }
 }
 

@@ -11,6 +11,8 @@
 
 #include "radiolib_wrapper.h"
 #include <stdio.h>
+#include "FreeRTOS.h"
+#include "task.h"
 
 static RadioEvents_t *radio_events = NULL;
 
@@ -92,6 +94,16 @@ int16_t RadioLib_StartCad(void)
         radio_events->CadDone(0);
     }
     return 0;
+}
+
+int16_t RadioLib_DutyCycleReceive(uint32_t listenMs, uint16_t preambleLen,
+                                  uint8_t *outBuf, uint16_t bufSize,
+                                  uint16_t *outLen, int16_t *outRssi, int8_t *outSnr)
+{
+    printf("[RADIO MOCK] DutyCycleReceive: listen=%lums preamble=%u (timeout)\r\n",
+           (unsigned long)listenMs, preambleLen);
+    vTaskDelay(pdMS_TO_TICKS(listenMs));
+    return -1;
 }
 
 void RadioLib_IrqProcess(void)

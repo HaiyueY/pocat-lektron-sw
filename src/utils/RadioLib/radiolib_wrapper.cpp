@@ -5,6 +5,8 @@
 #include <RadioLib.h>
 #include "stm32_radiolib_hal.h"
 #include <stdio.h>
+#include "FreeRTOS.h"
+#include "semphr.h"
 
 
 // Instantiate C++ outside of extern "C"
@@ -33,6 +35,14 @@ static float bwCodeToKHz(uint8_t bw_code) {
     case 2: return 500.0f;
     default: return 125.0f;
   }
+}
+
+static SemaphoreHandle_t s_dutyCycleSem = NULL;
+
+static void dutyCycleIsrCallback(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(s_dutyCycleSem, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 extern "C" { // to stop name mangling
@@ -185,58 +195,162 @@ extern "C" { // to stop name mangling
         return radio.scanChannel();
     }
 
-    // CAD + RX
-    int16_t RadioLib_CadReceive(uint32_t rxTimeoutMs,
+    // Uses startChannelScan() (non-blocking) + DIO1 polling instead of the
+    // blocking scanChannel() which only does a single scan.
+    int16_t RadioLib_CadReceive(uint32_t cadTimeoutMs, uint32_t rxTimeoutMs,
                            uint8_t *outBuf, uint16_t bufSize,
                            uint16_t *outLen, int16_t *outRssi, int8_t *outSnr)
     {
         ChannelScanConfig_t cfg = {
             .cad = {
-                .symNum = RADIOLIB_SX126X_CAD_PARAM_DEFAULT,
-                .detPeak = RADIOLIB_SX126X_CAD_PARAM_DEFAULT,
+                .symNum = RADIOLIB_SX126X_CAD_ON_8_SYMB,
+                .detPeak = 24, // default is 21 (RADIOLIB_SX126X_CAD_PARAM_DEFAULT), but it detects too much noise at 21.
                 .detMin = RADIOLIB_SX126X_CAD_PARAM_DEFAULT,
                 .exitMode = RADIOLIB_SX126X_CAD_GOTO_RX,
                 .timeout = (RadioLibTime_t)rxTimeoutMs * 1000UL,
-                .irqFlags = RADIOLIB_IRQ_CAD_DEFAULT_FLAGS,
-                .irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK,
+                .irqFlags = (1UL << RADIOLIB_IRQ_CAD_DETECTED) |
+                            (1UL << RADIOLIB_IRQ_CAD_DONE) |
+                            (1UL << RADIOLIB_IRQ_RX_DONE) |
+                            (1UL << RADIOLIB_IRQ_TIMEOUT) |
+                            (1UL << RADIOLIB_IRQ_CRC_ERR) |
+                            (1UL << RADIOLIB_IRQ_HEADER_VALID) |
+                            (1UL << RADIOLIB_IRQ_HEADER_ERR),
+                .irqMask  = (1UL << RADIOLIB_IRQ_CAD_DETECTED) |
+                            (1UL << RADIOLIB_IRQ_CAD_DONE) |
+                            (1UL << RADIOLIB_IRQ_RX_DONE) |
+                            (1UL << RADIOLIB_IRQ_TIMEOUT),
             },
         };
 
-        int16_t cadResult = radio.scanChannel(cfg);
-        if (cadResult != RADIOLIB_LORA_DETECTED) {
-            return cadResult;
-        }
-        bool softTimeout = false;
-        RadioLibTime_t start = hal.millis();
+        RadioLibTime_t cadDeadline = hal.millis() + cadTimeoutMs;
+
         for (;;) {
+            if (hal.millis() >= cadDeadline) {
+                return RADIOLIB_CHANNEL_FREE;
+            }
+
+            int16_t state = radio.startChannelScan(cfg);
+            if (state != RADIOLIB_ERR_NONE) {
+                return state;
+            }
+            
+            // The following logic mimics the radiolibs implementation of scanchannel() and receive()
+            while (!hal.digitalRead(mod.getIrq())) {
+                hal.yield();
+                if (hal.millis() >= cadDeadline) {
+                    (void)radio.standby();
+                    return RADIOLIB_CHANNEL_FREE;
+                }
+            }
+
             uint32_t irq = radio.getIrqFlags();
-            if (irq & RADIOLIB_SX126X_IRQ_RX_DONE)   break;
-            if (irq & RADIOLIB_SX126X_IRQ_TIMEOUT)    { softTimeout = true; break; }
-            if (hal.millis() - start > rxTimeoutMs)    { softTimeout = true; break; }
-            hal.yield();
+
+            if (!(irq & RADIOLIB_SX126X_IRQ_CAD_DETECTED)) {
+                /* Channel free — immediately loop back for the next scan.
+                   startChannelScan() clears IRQs internally on re-entry. */
+                continue;
+            }
+
+            /* ===== Phase 2: LoRa detected — radio is now in RX ===== */
+            printf("COMMS: CAD detected LoRa activity\r\n");
+
+            /* Clear the CAD IRQ bits so DIO1 can re-fire on RX_DONE. */
+            radio.clearIrqFlags(
+                RADIOLIB_SX126X_IRQ_CAD_DONE |
+                RADIOLIB_SX126X_IRQ_CAD_DETECTED);
+
+            /* Wait for DIO1 → RX_DONE or TIMEOUT */
+            bool softTimeout = false;
+            RadioLibTime_t rxDeadline = hal.millis() + rxTimeoutMs + 1000;
+            while (!hal.digitalRead(mod.getIrq())) {
+                hal.yield();
+                if (hal.millis() >= rxDeadline) {
+                    softTimeout = true;
+                    break;
+                }
+            }
+
+            state = radio.standby();
+            if ((state != RADIOLIB_ERR_NONE) && (state != RADIOLIB_ERR_SPI_CMD_TIMEOUT)) {
+                printf("COMMS: Error transitioning to standby after CAD detection: %d\r\n", state);
+                return state;
+            }
+
+            irq = radio.getIrqFlags();
+
+            if (softTimeout || (irq & RADIOLIB_SX126X_IRQ_TIMEOUT)) {
+                (void)radio.clearIrqFlags(RADIOLIB_SX126X_IRQ_ALL);
+                printf("COMMS: CAD->RX timeout, retrying\r\n");
+                continue;
+            }
+
+            printf("COMMS: CAD->RX done, reading packet\r\n");
+            size_t pktLen = radio.getPacketLength();
+
+            int16_t st = radio.readData(outBuf, bufSize);
+            if (st == RADIOLIB_ERR_NONE) {
+                if (outLen)  *outLen  = (uint16_t)(pktLen > bufSize ? bufSize : pktLen);
+                if (outRssi) *outRssi = (int16_t)radio.getRSSI();
+                if (outSnr)  *outSnr  = (int8_t)radio.getSNR();
+            }
+            return st;
+        }
+    }
+
+    int16_t RadioLib_DutyCycleReceive(uint32_t listenMs, uint16_t preambleLen,
+                                      uint8_t *outBuf, uint16_t bufSize,
+                                      uint16_t *outLen, int16_t *outRssi, int8_t *outSnr)
+    {
+        // Create semaphore once (persists across calls)
+        if (s_dutyCycleSem == NULL) {
+            s_dutyCycleSem = xSemaphoreCreateBinary();
+            if (s_dutyCycleSem == NULL) return -1;
         }
 
-        // receive should not be called here, but following radiolibs implementation of receive: 
-        int16_t state = radio.standby();
-        if ((state != RADIOLIB_ERR_NONE) && (state != RADIOLIB_ERR_SPI_CMD_TIMEOUT)) {
+        // Drain any stale signal from a previous interrupted cycle
+        xSemaphoreTake(s_dutyCycleSem, 0);
+
+        // Attach DIO1 rising-edge interrupt → ISR gives semaphore
+        hal.attachInterrupt(mod.getIrq(), dutyCycleIsrCallback, hal.GpioInterruptRising);
+
+        // Start hardware duty cycle RX (radio cycles autonomously)
+        int16_t state = radio.startReceiveDutyCycleAuto(
+            preambleLen, 0,
+            RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
+            RADIOLIB_IRQ_RX_DEFAULT_MASK);
+        if (state != RADIOLIB_ERR_NONE) {
+            hal.detachInterrupt(mod.getIrq());
             return state;
         }
 
-        if (softTimeout || (radio.getIrqFlags() & RADIOLIB_SX126X_IRQ_TIMEOUT)) {
-            (void)radio.finishReceive();
+        // Block until DIO1 fires (RX_DONE) or our listen window expires
+        BaseType_t got = xSemaphoreTake(s_dutyCycleSem, pdMS_TO_TICKS(listenMs));
+
+        // Stop radio and detach interrupt
+        radio.standby();
+        hal.detachInterrupt(mod.getIrq());
+
+        if (got != pdTRUE) {
+            radio.clearIrqFlags(RADIOLIB_SX126X_IRQ_ALL);
             return RADIOLIB_ERR_RX_TIMEOUT;
         }
 
-        size_t pktLen = radio.getPacketLength();
-        if (pktLen > bufSize) pktLen = bufSize;
+        // DIO1 fired — check what happened
+        uint32_t irq = radio.getIrqFlags();
 
-        int16_t st = radio.readData(outBuf, pktLen);
+        if (!(irq & RADIOLIB_SX126X_IRQ_RX_DONE)) {
+            radio.clearIrqFlags(RADIOLIB_SX126X_IRQ_ALL);
+            return RADIOLIB_ERR_RX_TIMEOUT;
+        }
+
+        // Read the packet
+        size_t pktLen = radio.getPacketLength();
+        int16_t st = radio.readData(outBuf, bufSize);
         if (st == RADIOLIB_ERR_NONE) {
-            if (outLen)  *outLen  = (uint16_t)pktLen;
+            if (outLen)  *outLen  = (uint16_t)(pktLen > bufSize ? bufSize : pktLen);
             if (outRssi) *outRssi = (int16_t)radio.getRSSI();
             if (outSnr)  *outSnr  = (int8_t)radio.getSNR();
         }
-
         return st;
     }
 

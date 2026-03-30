@@ -85,6 +85,6 @@ void send_beacon(void)
     // Deployment status
     beacon_pkt[11] = 0; // Not deployed
 
-    txq_enqueue(beacon_pkt, 12, 0, 1);
+    txq_enqueue(beacon_pkt, 12, 0, 0);
     return;
 }
