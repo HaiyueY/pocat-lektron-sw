@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include "obc.h"
 #include "log.h"
+#include "time.h"
 
 /** @brief Handle for the OBC FreeRTOS task*/
 static TaskHandle_t obc_task_handle;
@@ -66,6 +67,7 @@ int main(void)
   MX_ADC1_Init();
 
   log_init();
+  time_init();
 
   printf("\r\n=======================\r\n pocat flight software\r\n=======================\r\n\r\n");
   
