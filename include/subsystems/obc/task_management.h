@@ -28,6 +28,7 @@ BaseType_t tm_create_all_tasks(void);
  */
 void tm_reset_payload_task(void);
 
+
 /**
  * @brief Reset the EPS task by suspending, deleting, and recreating it.
  */
@@ -67,10 +68,20 @@ TaskHandle_t obc_get_eps_handle(void);
 TaskHandle_t obc_get_obdh_handle(void);
 
 /**
+ * @brief Get the ADCS task handle.
+ * @return TaskHandle_t for ADCS task, or NULL if not created.
+ */
+TaskHandle_t obc_get_adcs_handle(void);
+
+/**
  * @brief Get the payload task handle.
  * @return TaskHandle_t for payload task, or NULL if not created.
  */
 TaskHandle_t obc_get_payload_handle(void);
+
+void tm_change_state_to_nominal(void);
+void tm_change_state_to_contingency(void);
+void tm_change_state_to_sunsafe(void);
 
 /** @} */
 

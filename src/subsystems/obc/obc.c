@@ -49,7 +49,6 @@ static void handle_health_faults(EventBits_t faults);
 // a considerar/eliminar:
 static ObcState_t currentState;
 
-ObcState_t obc_get_current_state(void) { return currentState; }
 
 /* ---- Public function definitions ---- */
 
@@ -96,6 +95,7 @@ static void setup_obc(void) {
     health_config(pdMS_TO_TICKS(5000));
 
     state_machine_init(&currentState);
+    suspend_and_resume_tasks_depending_on_state(&currentState);
 }
 
 
@@ -105,9 +105,12 @@ static void process_obc(ObcState_t *currentState) {
     uint32_t notificationValue = process_obc_notifications();
 
     //printf("Processing OBC...\r\n");
-    currentState = check_next_state(currentState, notificationValue);
+    int8_t stateChange = 0;
+    currentState = check_next_state(currentState, notificationValue, &stateChange);
 
-    suspend_and_resume_tasks_depending_on_state(currentState);
+    if (stateChange) {
+        suspend_and_resume_tasks_depending_on_state(currentState);
+    }
 
     vTaskDelay(pdMS_TO_TICKS(100)); // Delay to prevent busy looping, adjust as needed
 
@@ -152,9 +155,15 @@ static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState
     switch (*currentState) {
 
         case NOMINAL:
-            // Suspend or resume tasks as needed for the NOMINAL state
-            // vTaskSuspend(task_handle) ....
-            // vTaskResume(task_handle) ....
+            tm_change_state_to_nominal();
+            break;
+        
+        case CONTINGENCY:
+            tm_change_state_to_contingency();
+            break;
+
+        case SUNSAFE:
+            tm_change_state_to_sunsafe();
             break;
 
         default:

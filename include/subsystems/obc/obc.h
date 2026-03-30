@@ -23,7 +23,9 @@
 #define PAYLOAD_STACK_SIZE  1024  
 #define EPS_STACK_SIZE      1024
 #define COMMS_STACK_SIZE    1024   
+#define ADCS_STACK_SIZE     1024
 #define OBDH_STACK_SIZE     1024   
+
 
 
 // Task priorities
@@ -31,6 +33,7 @@
 #define PAYLOAD_PRIORITY    1
 #define EPS_PRIORITY        1
 #define COMMS_PRIORITY      1
+#define ADCS_PRIORITY       1
 #define OBDH_PRIORITY       1
 
 /**
@@ -46,7 +49,6 @@ TaskHandle_t obc_get_comms_handle(void);
 TaskHandle_t obc_get_eps_handle(void);
 TaskHandle_t obc_get_obdh_handle(void);
 TaskHandle_t obc_get_payload_handle(void);
-ObcState_t   obc_get_current_state(void);
 /** @} */
 
 #endif /* INC_OBC_H_ */
