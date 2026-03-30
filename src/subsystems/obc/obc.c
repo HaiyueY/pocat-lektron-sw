@@ -14,6 +14,7 @@
 /* ---- Includes ---- */
 #include <stdint.h> //mirar
 #include "obc.h"
+#include "task_management.h"
 #include "state_machine.h"
 #include "FreeRTOS.h" // mirar
 #include "task.h" // mirar
@@ -23,27 +24,15 @@
 #include "obdh.h"
 #include "payload.h"
 #include "health.h"
-#include "log.h"    
+#include "log.h"
 #include "flash.h"
+#include "notifications.h"
 
 /* ---- Macros and constants ---- */
 //Variables que vaig fer servir per a la simulació, no verificats
 #define OBDH_QUEUE_LEN 10
 #define OBDH_ITEM_SIZE sizeof(obdh_request)
 
-/* ---- Module-level variables ---- */
-static TaskHandle_t payload_task_handle;
-static TaskHandle_t eps_task_handle;
-static TaskHandle_t comms_task_handle;
-static TaskHandle_t obdh_task_handle;
-
-
-/* ---- Public getters ---- */
-
-TaskHandle_t obc_get_comms_handle(void)   { return comms_task_handle; }
-TaskHandle_t obc_get_eps_handle(void)     { return eps_task_handle; }
-TaskHandle_t obc_get_obdh_handle(void)    { return obdh_task_handle; }
-TaskHandle_t obc_get_payload_handle(void) { return payload_task_handle; }
 
 /* ---- Private function prototypes ---- */
 static void setup_obc(void);
@@ -51,17 +40,11 @@ static void process_obc(ObcState_t *currentState);
 // static void create_queues(void);  // TODO: implement this function
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState);
 static uint32_t waitForNotification(void);
+
+static void process_obc_notifications(void);
+
 static void handlePayloadCapture(void);
 static void handle_health_faults(EventBits_t faults);
-static BaseType_t create_payload_task(void);
-static BaseType_t create_eps_task(void);
-static BaseType_t create_comms_task(void);
-static BaseType_t create_obdh_task(void);
-
-void reset_payload_task(void);
-void reset_eps_task(void);
-void reset_comms_task(void);
-void reset_obdh_task(void);
 
 // a considerar/eliminar:
 static ObcState_t currentState;
@@ -97,28 +80,13 @@ static void setup_obc(void) {
     if (obdh_queue_handle == NULL) {
         printf("ERROR: Could not create OBDH Queue\n");
         // This has to be implemented
-        while(1); 
+        while(1);
     }
     // 2. Create tasks
-    BaseType_t ok = create_payload_task();
+    BaseType_t ok = tm_create_all_tasks();
     if (ok != pdPASS)
     {
-        printf("Error creating payload task\r\n");
-    }
-    ok = create_eps_task();
-    if (ok != pdPASS)
-    {
-        printf("Error creating eps task\r\n");
-    }
-    ok = create_comms_task();
-    if (ok != pdPASS)
-    {
-        printf("Error creating comms task\r\n");
-    }
-    ok = create_obdh_task();
-    if (ok != pdPASS)
-    {
-        printf("Error creating obdh task\r\n");
+        printf("Error creating subsystem tasks\r\n");
     }
     health_init();
     health_register_iwdg(&hiwdg);
@@ -130,6 +98,9 @@ static void setup_obc(void) {
 
 static void process_obc(ObcState_t *currentState) {
 
+    // Process notifications:
+    process_obc_notifications();
+
     //printf("Processing OBC...\r\n");
     currentState = check_next_state(currentState);
 
@@ -137,6 +108,39 @@ static void process_obc(ObcState_t *currentState) {
 
     vTaskDelay(pdMS_TO_TICKS(100)); // Delay to prevent busy looping, adjust as needed
 
+}
+
+static void process_obc_notifications(void) {
+
+    uint32_t notificationValue;
+    xTaskNotifyWait( 0,          // don't clear on entry
+                    0xFFFFFFFF, // clear all bits on exit
+                    &notificationValue,
+                    0);         // don't block, just check if there's a notification);
+
+    // Process the notification value and take appropriate actions
+    // For example:
+    if (notificationValue & N_OBC_EXIT_STATE_TO_NOMINAL) {
+        printf("Transitioning to NOMINAL state\r\n");
+        // Handle transition to NOMINAL state
+    }
+    if (notificationValue & N_OBC_EXIT_STATE_TO_CONTINGENCY) {
+        printf("Transitioning to CONTINGENCY state\r\n");
+        // Handle transition to CONTINGENCY state
+    }
+    if (notificationValue & N_OBC_EXIT_STATE_TO_SUNSAFE) {
+        printf("Transitioning to SUNSAFE state\r\n");
+        // Handle transition to SUNSAFE state
+    }
+    if (notificationValue & N_OBC_EXIT_STATE_TO_SURVIVAL) {
+        printf("Transitioning to SURVIVAL state\r\n");
+        // Handle transition to SURVIVAL state
+    }
+    if (notificationValue & N_OBC_UPDATE_TIME) {
+        printf("Updating system time\r\n");
+        // Handle time update, e.g., read new time from OBDH or TC and set RTC
+    }
+    // ... handle other notifications as needed
 }
 
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState) {
@@ -155,15 +159,6 @@ static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState
 
     }
 
-}
-
-static uint32_t waitForNotification(void) {
-    uint32_t notificationValue;
-    xTaskNotifyWait( 0,          // don't clear on entry
-                    0xFFFFFFFF, // clear all bits on exit
-                    &notificationValue,
-                    portMAX_DELAY );
-    return notificationValue;
 }
 
 static void handlePayloadCapture(void) {
@@ -199,125 +194,24 @@ ObcState_t Nominal(void) {
 static void handle_health_faults(EventBits_t faults)
 {
     if (faults & HEALTH_BIT_EPS) {
-        reset_eps_task();
+        tm_reset_eps_task();
         printf("EPS task reset due to health check\r\n");
     }
     if (faults & HEALTH_BIT_COMMS) {
-        reset_comms_task();
+        tm_reset_comms_task();
         printf("COMMS task reset due to health check\r\n");
     }
     if (faults & HEALTH_BIT_PAYLOAD) {
-        reset_payload_task();
+        tm_reset_payload_task();
         printf("PAYLOAD task reset due to health check\r\n");
     }
     if (faults & HEALTH_BIT_OBDH) {
-        reset_obdh_task();
+        tm_reset_obdh_task();
         printf("OBDH task reset due to health check\r\n");
     }
 }
 
 
-static BaseType_t create_payload_task(void)
-{
-    return xTaskCreate(payload_task, "PAYLOAD", PAYLOAD_STACK_SIZE, NULL, PAYLOAD_PRIORITY, &payload_task_handle);
-}
-
-static BaseType_t create_eps_task(void)
-{
-    return xTaskCreate(eps_task, "EPS", EPS_STACK_SIZE, NULL, EPS_PRIORITY, &eps_task_handle);
-}
-
-static BaseType_t create_comms_task(void)
-{
-    return xTaskCreate(comms_task, "COMMS", COMMS_STACK_SIZE, NULL, COMMS_PRIORITY, &comms_task_handle);
-}
-
-static BaseType_t create_obdh_task(void)
-{
-    return xTaskCreate(obdh_task, "OBDH", OBDH_STACK_SIZE, NULL, OBDH_PRIORITY, &obdh_task_handle);
-}
-
-void reset_payload_task(void)
-{
-    if (payload_task_handle == NULL)
-        return;
-
-    taskENTER_CRITICAL();
-
-    vTaskSuspend(payload_task_handle);
-    vTaskDelete(payload_task_handle);
-    payload_task_handle = NULL;
-
-    taskEXIT_CRITICAL();
-
-    BaseType_t ok = create_payload_task();
-    if (ok != pdPASS)
-    {
-        // error
-    }
-}
-
-void reset_eps_task(void)
-{
-    if (eps_task_handle == NULL)
-        return;
-
-    taskENTER_CRITICAL();
-
-    vTaskSuspend(eps_task_handle);
-    vTaskDelete(eps_task_handle);
-    eps_task_handle = NULL;
-
-    taskEXIT_CRITICAL();
-
-    BaseType_t ok = create_eps_task();
-    if (ok != pdPASS)
-    {
-        // error
-    }
-}
-
-void reset_comms_task(void)
-{
-    if (comms_task_handle == NULL)
-        return;
-
-    taskENTER_CRITICAL();
-
-    vTaskSuspend(comms_task_handle);
-    vTaskDelete(comms_task_handle);
-    comms_task_handle = NULL;
-
-    taskEXIT_CRITICAL();
-
-    BaseType_t ok = create_comms_task();
-
-    if (ok != pdPASS)
-    {
-        // error
-    }
-}
-
-void reset_obdh_task(void)
-{
-    if (obdh_task_handle == NULL)
-        return;
-
-    taskENTER_CRITICAL();
-
-    vTaskSuspend(obdh_task_handle);
-    vTaskDelete(obdh_task_handle);
-    obdh_task_handle = NULL;
-
-    taskEXIT_CRITICAL();
-
-    BaseType_t ok = create_obdh_task();
-
-    if (ok != pdPASS)
-    {
-        // error
-    }
-}
 
 // REVISAR!!
     // The obc task / manager task is the only one that is in charge of changing satellite modes

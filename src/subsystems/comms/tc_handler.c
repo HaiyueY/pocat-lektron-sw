@@ -149,6 +149,7 @@ int tc_process(const uint8_t *rx_data)
          */
         // TODO: save in OBDH?
         notify(main_get_obc_handle(), N_OBC_UPDATE_TIME);
+        time_set_unix((rx_data[3] << 24) | (rx_data[4] << 16) | (rx_data[5] << 8) | rx_data[6]);
         break;
 
     case TC_UPLOAD_EPS_TH:
