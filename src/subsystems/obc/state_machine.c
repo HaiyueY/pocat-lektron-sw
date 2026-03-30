@@ -10,34 +10,37 @@
 #include "notifications.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "flash.h"
 
 #include <stdio.h>
 
-ObcState_t *check_next_state(ObcState_t *currentState)
+void state_machine_init(ObcState_t *currentState) {
+    // Initialize state machine, e.g., read current state from flash
+    OBDH_Read_Request(CURRENT_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t));
+}
+
+static void change_state(ObcState_t *currentState, ObcState_t newState)
 {
-    uint32_t notif = 0;
-    xTaskNotifyWait(0, 0xFFFFFFFF, &notif, 0);
+    OBDH_Write_Request(PREVIOUS_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t)); // Store the current state in flash
+    *currentState = newState;  
+    OBDH_Write_Request(CURRENT_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t)); // Update the current state in flash
+}
 
-    if (notif & N_OBC_EXIT_STATE_TO_NOMINAL)
-    { 
-        *currentState = NOMINAL;  
-        printf("Transitioning to NOMINAL state\r\n");   
+ObcState_t *check_next_state(ObcState_t *currentState, uint32_t notificationValue)
+{
+    // ADD EPS LOGIC 
+    if (notificationValue & N_OBC_EXIT_STATE_TO_NOMINAL) {
+        change_state(currentState, NOMINAL);
     }
-    else if (notif & N_OBC_EXIT_STATE_TO_CONTINGENCY) 
-    { 
-        *currentState = CONTINGENCY; 
-        printf("Transitioning to CONTINGENCY state\r\n");
+    else if (notificationValue & N_OBC_EXIT_STATE_TO_CONTINGENCY) {
+        change_state(currentState, CONTINGENCY);
     }
-    else if (notif & N_OBC_EXIT_STATE_TO_SUNSAFE)     
-    {
-        *currentState = SUNSAFE;     
-        printf("Transitioning to SUNSAFE state\r\n");
+    else if (notificationValue & N_OBC_EXIT_STATE_TO_SUNSAFE) {
+        change_state(currentState, SUNSAFE);
     }
-    else if (notif & N_OBC_EXIT_STATE_TO_SURVIVAL)    
-    {
-        *currentState = SURVIVAL;    
-        printf("Transitioning to SURVIVAL state\r\n");
+    else if (notificationValue & N_OBC_EXIT_STATE_TO_SURVIVAL) {
+        change_state(currentState, SURVIVAL);
     }
-
+    // ... handle other notifications as needed
     return currentState;
 }

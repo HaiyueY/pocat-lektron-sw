@@ -41,7 +41,7 @@ static void process_obc(ObcState_t *currentState);
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState);
 static uint32_t waitForNotification(void);
 
-static void process_obc_notifications(void);
+static uint32_t process_obc_notifications(void);
 
 static void handlePayloadCapture(void);
 static void handle_health_faults(EventBits_t faults);
@@ -88,21 +88,24 @@ static void setup_obc(void) {
     {
         printf("Error creating subsystem tasks\r\n");
     }
+
     health_init();
     health_register_iwdg(&hiwdg);
     health_set_expected(HEALTH_BIT_PAYLOAD | HEALTH_BIT_OBDH |
                         HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
     health_config(pdMS_TO_TICKS(5000));
+
+    state_machine_init(&currentState);
 }
 
 
 static void process_obc(ObcState_t *currentState) {
 
     // Process notifications:
-    process_obc_notifications();
+    uint32_t notificationValue = process_obc_notifications();
 
     //printf("Processing OBC...\r\n");
-    currentState = check_next_state(currentState);
+    currentState = check_next_state(currentState, notificationValue);
 
     suspend_and_resume_tasks_depending_on_state(currentState);
 
@@ -110,7 +113,7 @@ static void process_obc(ObcState_t *currentState) {
 
 }
 
-static void process_obc_notifications(void) {
+static uint32_t process_obc_notifications(void) {
 
     uint32_t notificationValue;
     xTaskNotifyWait( 0,          // don't clear on entry
@@ -121,26 +124,27 @@ static void process_obc_notifications(void) {
     // Process the notification value and take appropriate actions
     // For example:
     if (notificationValue & N_OBC_EXIT_STATE_TO_NOMINAL) {
-        printf("Transitioning to NOMINAL state\r\n");
+        //printf("Transitioning to NOMINAL state\r\n");
         // Handle transition to NOMINAL state
     }
     if (notificationValue & N_OBC_EXIT_STATE_TO_CONTINGENCY) {
-        printf("Transitioning to CONTINGENCY state\r\n");
+        // printf("Transitioning to CONTINGENCY state\r\n");
         // Handle transition to CONTINGENCY state
     }
     if (notificationValue & N_OBC_EXIT_STATE_TO_SUNSAFE) {
-        printf("Transitioning to SUNSAFE state\r\n");
+        // printf("Transitioning to SUNSAFE state\r\n");
         // Handle transition to SUNSAFE state
     }
     if (notificationValue & N_OBC_EXIT_STATE_TO_SURVIVAL) {
-        printf("Transitioning to SURVIVAL state\r\n");
+        // printf("Transitioning to SURVIVAL state\r\n");
         // Handle transition to SURVIVAL state
     }
     if (notificationValue & N_OBC_UPDATE_TIME) {
-        printf("Updating system time\r\n");
+        // printf("Updating system time\r\n");
         // Handle time update, e.g., read new time from OBDH or TC and set RTC
     }
     // ... handle other notifications as needed
+    return notificationValue;
 }
 
 static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState) {

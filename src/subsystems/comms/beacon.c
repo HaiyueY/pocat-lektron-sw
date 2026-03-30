@@ -8,6 +8,7 @@
 #include "tx_queue.h"
 #include "time.h"
 #include "temperature.h"
+#include "flash.h"
 
 
 /* ---- Module-level variables ---- */
@@ -73,7 +74,7 @@ void send_beacon(void)
     beacon_pkt[7] = 0xFF; // -1 in two's complement
 
     // OBC state
-    beacon_pkt[8] = obc_get_current_state();
+    OBDH_Read_Request(CURRENT_STATE_ADDR, &beacon_pkt[8], sizeof(ObcState_t)) == 0 ? 0 : 0xFF; // Read current state from flash, return 0 if successful, else 0xFF
 
     // MCU supply voltage (Vdda) in units of 0.1V (e.g. 33 = 3.3V)
     // TODO: Get actual battery voltage once ADC is set up and calibrated
