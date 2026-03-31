@@ -68,8 +68,8 @@ static void eps_process_notifications(void)
     uint32_t notifications = 0;
     xTaskNotifyWait(0, UINT32_MAX, &notifications, 0);
     if (notifications & N_EPS_NEW_THRESHOLDS) {
-        uint8_t thresholds[3];
-        OBDH_Read_Request(EPS_THRESHOLDS_ADDR, thresholds, 3);
+        uint8_t thresholds[3] = {0}; // TODO define default theshholds in case of read failure
+        OBDH_Read_Request(EPS_THRESHOLDS_ADDR, thresholds, 3); 
         // Thresholds are now in the thresholds array, in the order: 
         // thresholds[0]: nominal
         // thresholds[1]: contingency

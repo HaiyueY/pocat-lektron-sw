@@ -40,6 +40,11 @@ void tm_reset_eps_task(void);
 void tm_reset_comms_task(void);
 
 /**
+ * @brief Reset the ADCS task by suspending, deleting, and recreating it.
+ */
+void tm_reset_adcs_task(void);
+
+/**
  * @brief Reset the OBDH task by suspending, deleting, and recreating it.
  */
 void tm_reset_obdh_task(void);
@@ -79,9 +84,6 @@ TaskHandle_t obc_get_adcs_handle(void);
  */
 TaskHandle_t obc_get_payload_handle(void);
 
-void tm_change_state_to_nominal(void);
-void tm_change_state_to_contingency(void);
-void tm_change_state_to_sunsafe(void);
 
 /** @} */
 

@@ -72,6 +72,13 @@ void health_config(TickType_t period);
 void health_set_expected(EventBits_t expected_bits);
 
 /**
+ * @brief Get the currently expected subsystems for health monitoring.
+ *
+ * @return Bitmask of currently expected subsystems (OR of health_bit_t values).
+ */
+EventBits_t health_get_expected(void);
+
+/**
  * @brief Check system health and get faulty subsystems.
  *
  * Should be called periodically by the OBC task. When the health check

@@ -103,6 +103,14 @@ void health_set_expected(EventBits_t exp_bits)
     start_new_period(xTaskGetTickCount());
 }
 
+EventBits_t health_get_expected(void)
+{
+    lock();
+    EventBits_t exp = expected_bits;
+    unlock();
+    return exp;
+}
+
 
 EventBits_t system_health(BaseType_t *period_elapsed)
 {

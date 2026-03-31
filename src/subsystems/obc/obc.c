@@ -37,13 +37,10 @@
 /* ---- Private function prototypes ---- */
 static void setup_obc(void);
 static void process_obc(ObcState_t *currentState);
-// static void create_queues(void);  // TODO: implement this function
-static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState);
-static uint32_t waitForNotification(void);
 
+static void change_to_state(ObcState_t *currentState);
 static uint32_t process_obc_notifications(void);
 
-static void handlePayloadCapture(void);
 static void handle_health_faults(EventBits_t faults);
 
 // a considerar/eliminar:
@@ -81,6 +78,11 @@ static void setup_obc(void) {
         // This has to be implemented
         while(1);
     }
+
+    health_init();
+    health_register_iwdg(&hiwdg);
+    health_config(pdMS_TO_TICKS(5000));
+
     // 2. Create tasks
     BaseType_t ok = tm_create_all_tasks();
     if (ok != pdPASS)
@@ -88,14 +90,7 @@ static void setup_obc(void) {
         printf("Error creating subsystem tasks\r\n");
     }
 
-    health_init();
-    health_register_iwdg(&hiwdg);
-    health_set_expected(HEALTH_BIT_PAYLOAD | HEALTH_BIT_OBDH |
-                        HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
-    health_config(pdMS_TO_TICKS(5000));
-
     state_machine_init(&currentState);
-    suspend_and_resume_tasks_depending_on_state(&currentState);
 }
 
 
@@ -105,12 +100,7 @@ static void process_obc(ObcState_t *currentState) {
     uint32_t notificationValue = process_obc_notifications();
 
     //printf("Processing OBC...\r\n");
-    int8_t stateChange = 0;
-    currentState = check_next_state(currentState, notificationValue, &stateChange);
-
-    if (stateChange) {
-        suspend_and_resume_tasks_depending_on_state(currentState);
-    }
+    check_next_state(currentState, notificationValue);
 
     vTaskDelay(pdMS_TO_TICKS(100)); // Delay to prevent busy looping, adjust as needed
 
@@ -124,80 +114,22 @@ static uint32_t process_obc_notifications(void) {
                     &notificationValue,
                     0);         // don't block, just check if there's a notification);
 
-    // Process the notification value and take appropriate actions
-    // For example:
-    if (notificationValue & N_OBC_EXIT_STATE_TO_NOMINAL) {
-        //printf("Transitioning to NOMINAL state\r\n");
-        // Handle transition to NOMINAL state
-    }
-    if (notificationValue & N_OBC_EXIT_STATE_TO_CONTINGENCY) {
-        // printf("Transitioning to CONTINGENCY state\r\n");
-        // Handle transition to CONTINGENCY state
-    }
-    if (notificationValue & N_OBC_EXIT_STATE_TO_SUNSAFE) {
-        // printf("Transitioning to SUNSAFE state\r\n");
-        // Handle transition to SUNSAFE state
-    }
-    if (notificationValue & N_OBC_EXIT_STATE_TO_SURVIVAL) {
-        // printf("Transitioning to SURVIVAL state\r\n");
-        // Handle transition to SURVIVAL state
+    if (notificationValue == N_OBC_EXIT_STATE_GROUP_MASK) {
+        // Notification to change state, but we will check the exact state in the state machine function
     }
     if (notificationValue & N_OBC_UPDATE_TIME) {
         // printf("Updating system time\r\n");
         // Handle time update, e.g., read new time from OBDH or TC and set RTC
     }
-    // ... handle other notifications as needed
-    return notificationValue;
-}
-
-static void suspend_and_resume_tasks_depending_on_state(ObcState_t *currentState) {
-
-    switch (*currentState) {
-
-        case NOMINAL:
-            tm_change_state_to_nominal();
-            break;
-        
-        case CONTINGENCY:
-            tm_change_state_to_contingency();
-            break;
-
-        case SUNSAFE:
-            tm_change_state_to_sunsafe();
-            break;
-
-        default:
-            //printf("Unknown state\r\n");
-            break;
-
+    if (notificationValue & N_OBC_HARD_REBOOT) {
+        // Handle hard reboot, e.g., trigger a watchdog reset or perform necessary cleanup before rebooting
+    }
+    if (notificationValue & N_OBC_SOFT_REBOOT) {
+        // Handle soft reboot, e.g., reset tasks and reinitialize subsystems without clearing flash
     }
 
-}
-
-static void handlePayloadCapture(void) {
-    // xTaskNotify(payload_task_handle,  // Fixed: was xPayloadTaskHandle
-    //         PAYLOAD_PHOTO_CAPTURE,
-    //         eSetBits);
-    // ...
-}
-
-// TODO: implement or remove this function
-// static void obc_does_nominal(void) {
-//     // 
-// }
-
-// implemented until here at the moment:
-
-ObcState_t Nominal(void) {
-    // to do:
-    //  frequency tratment for state
-    for(;;)
-	{
-        uint32_t notificationValue = waitForNotification();
-
-        //  if ( notificationValue & OBC_PHOTO_CAPTURE ) handlePayloadCapture();
-        // ... handle other events
-	}
+    // ... handle other notifications as needed
+    return notificationValue;
 }
 
 /**
@@ -221,6 +153,10 @@ static void handle_health_faults(EventBits_t faults)
     if (faults & HEALTH_BIT_OBDH) {
         tm_reset_obdh_task();
         printf("OBDH task reset due to health check\r\n");
+    }
+    if (faults & HEALTH_BIT_ADCS) {
+        tm_reset_adcs_task();
+        printf("ADCS task reset due to health check\r\n");
     }
 }
 

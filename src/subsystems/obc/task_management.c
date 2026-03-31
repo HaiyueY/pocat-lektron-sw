@@ -18,6 +18,7 @@
 #include "payload.h"
 #include "adcs.h"
 #include "health.h"
+#include "flash.h"
 #include <stdio.h>
 
 /* ---- Module-level variables ---- */
@@ -39,63 +40,54 @@ TaskHandle_t obc_get_payload_handle(void) { return payload_task_handle; }
 
 static BaseType_t create_payload_task(void)
 {
-    return xTaskCreate(payload_task, "PAYLOAD", PAYLOAD_STACK_SIZE, NULL, PAYLOAD_PRIORITY, &payload_task_handle);
-}
-
-static BaseType_t suspend_payload_task(void)
-{
-    if (payload_task_handle == NULL)
-        return pdFAIL;
-
-    vTaskSuspend(payload_task_handle);
-    return pdPASS;
-}
-
-static BaseType_t resume_payload_task(void)
-{
-    if (payload_task_handle == NULL)
-        return pdFAIL;
-
-    vTaskResume(payload_task_handle);
-    return pdPASS;
+    BaseType_t ok = xTaskCreate(payload_task, "PAYLOAD", PAYLOAD_STACK_SIZE, NULL, PAYLOAD_PRIORITY, &payload_task_handle);
+    
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_PAYLOAD);
+    }
+      
+    return ok;
 }
 
 static BaseType_t create_eps_task(void)
 {
-    return xTaskCreate(eps_task, "EPS", EPS_STACK_SIZE, NULL, EPS_PRIORITY, &eps_task_handle);
+    BaseType_t ok = xTaskCreate(eps_task, "EPS", EPS_STACK_SIZE, NULL, EPS_PRIORITY, &eps_task_handle);
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_EPS);
+    }
+    return ok;
 }
 
 static BaseType_t create_comms_task(void)
 {
-    return xTaskCreate(comms_task, "COMMS", COMMS_STACK_SIZE, NULL, COMMS_PRIORITY, &comms_task_handle);
+    BaseType_t ok = xTaskCreate(comms_task, "COMMS", COMMS_STACK_SIZE, NULL, COMMS_PRIORITY, &comms_task_handle);
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_COMMS);
+    }
+    return ok;
 }
 
 static BaseType_t create_adcs_task(void)
 {
-    return xTaskCreate(adcs_task, "ADCS", ADCS_STACK_SIZE, NULL, ADCS_PRIORITY, &adcs_task_handle);
-}
-
-static BaseType_t suspend_adcs_task(void)
-{
-    if (adcs_task_handle == NULL)
-        return pdFAIL;
-
-    vTaskSuspend(adcs_task_handle);
-    return pdPASS;
-}
-
-static BaseType_t resume_adcs_task(void)
-{
-    if (adcs_task_handle == NULL)
-        return pdFAIL;
-
-    vTaskResume(adcs_task_handle);
-    return pdPASS;
+    BaseType_t ok = xTaskCreate(adcs_task, "ADCS", ADCS_STACK_SIZE, NULL, ADCS_PRIORITY, &adcs_task_handle);
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_ADCS);
+    }
+    return ok;
 }
 
 static BaseType_t create_obdh_task(void)
 {
-    return xTaskCreate(obdh_task, "OBDH", OBDH_STACK_SIZE, NULL, OBDH_PRIORITY, &obdh_task_handle);
+    BaseType_t ok = xTaskCreate(obdh_task, "OBDH", OBDH_STACK_SIZE, NULL, OBDH_PRIORITY, &obdh_task_handle);
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_OBDH);
+    }
+    return ok;
 }
 
 /* ---- Public function definitions ---- */
@@ -161,6 +153,27 @@ void tm_reset_comms_task(void)
     }
 }
 
+void tm_reset_adcs_task(void)
+{
+    if (adcs_task_handle == NULL)
+        return;
+    
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(adcs_task_handle);
+    vTaskDelete(adcs_task_handle);
+    adcs_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_adcs_task();
+
+    if (ok != pdPASS)
+    {
+        printf("Error recreating adcs task\r\n");
+    }
+}
+
 void tm_reset_obdh_task(void)
 {
     if (obdh_task_handle == NULL)
@@ -223,25 +236,3 @@ BaseType_t tm_create_all_tasks(void)
     return pdPASS;
 }
 
-void tm_change_state_to_nominal(void) {
-    resume_payload_task();
-    resume_adcs_task();
-    health_set_expected(HEALTH_BIT_PAYLOAD | HEALTH_BIT_OBDH | HEALTH_BIT_EPS | HEALTH_BIT_COMMS | HEALTH_BIT_ADCS);
-}
-
-void tm_change_state_to_contingency(void) {
-    // Example: suspend payload task, keep others running
-    suspend_payload_task();
-    suspend_adcs_task();
-    health_set_expected(HEALTH_BIT_OBDH | HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
-
-}
-
-void tm_change_state_to_sunsafe(void) {
-    // Example: suspend payload and comms tasks, keep others running
-    suspend_payload_task();
-    suspend_adcs_task();
-    health_set_expected(HEALTH_BIT_OBDH | HEALTH_BIT_EPS | HEALTH_BIT_COMMS);
-    // TODO disable EPS Heating
-    // TODO Disable comms transmission & reception
-}

@@ -25,6 +25,6 @@ void state_machine_init(ObcState_t *currentState);
  * @param currentState Pointer to the current operational state.
  * @return Pointer to the (possibly updated) state.
  */
-ObcState_t *check_next_state(ObcState_t *currentState, uint32_t notificationValue, uint8_t *stateChange);
+void check_next_state(ObcState_t *currentState, uint32_t notificationValue);
 
 #endif /* INC_STATE_MACHINE_H_ */

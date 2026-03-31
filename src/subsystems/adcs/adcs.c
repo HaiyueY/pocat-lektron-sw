@@ -44,10 +44,10 @@ static void point_to_nadir(void);
 void adcs_task(void *pv_parameters) {
     setup_adcs();
     for (;;) {
-        process_adcs();
+        //process_adcs();
         health_kick(HEALTH_BIT_ADCS);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        printf("ADCS loop\r\n");
+        //printf("ADCS loop\r\n");
     }
 }
 
@@ -74,6 +74,7 @@ static void process_adcs(void) {
 static void detumble(void) {
 
     // Don't exit function until finished 
+    return;
 
 }
 
