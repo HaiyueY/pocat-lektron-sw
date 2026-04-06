@@ -242,6 +242,35 @@ static inline quat_t quat_from_matrix(mat3d_t m)
     return quat_normalize(q);
 }
 
+/**
+ * Propagate quaternion forward using gyro angular velocity.
+ *
+ * The simulation uses kinematic equation (left multiplication):
+ *   dq/dt = -0.5 * [0, ω_body] ⊗ q
+ * Closed-form integration over dt:
+ *   q(t+dt) = dq ⊗ q(t)            (LEFT multiply)
+ *   dq = [cos(θ/2), -ω̂·sin(θ/2)],  θ = |ω|·dt
+ */
+static inline quat_t quat_gyro_propagate(quat_t q, vec3d_t omega, double dt)
+{
+    double w_norm = vec3d_norm(omega);
+    double theta = w_norm * dt;
+    quat_t dq;
+    if (theta < 1.0e-12) {
+        dq = quat_identity();
+    } else {
+        double half_theta = 0.5 * theta;
+        double c = cos(half_theta);
+        double k = -sin(half_theta) / w_norm;
+        dq.w = c;
+        dq.x = k * omega.x;
+        dq.y = k * omega.y;
+        dq.z = k * omega.z;
+    }
+    /* LEFT multiply: q' = dq ⊗ q */
+    return quat_normalize(quat_multiply(dq, q));
+}
+
 #ifdef __cplusplus
 }
 #endif

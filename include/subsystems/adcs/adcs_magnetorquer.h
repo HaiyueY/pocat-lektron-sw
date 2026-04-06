@@ -32,6 +32,14 @@ extern "C" {
 void mtq_compute_command(vec3d_t desired_dipole, mtq_command_t *cmd);
 
 /**
+ * @brief Reset sigma-delta current accumulator.
+ *
+ * Call when switching ADCS modes (e.g., detumble → nadir pointing)
+ * to avoid stale accumulated commands from the previous mode.
+ */
+void mtq_reset_accumulator(void);
+
+/**
  * @brief Send magnetorquer command to hardware (or simulator).
  *
  * Platform-specific implementation: writes I2C registers on STM32,

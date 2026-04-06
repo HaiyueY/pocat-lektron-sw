@@ -145,27 +145,31 @@ extern "C" {
 
 /** Proportional gain kP for magnetic control law [A·m²]
  *
- *  From PIDMIMO(Inertia, zeta=1, omega=0.00125, tauInt=300, omegaR=0.1, dT=2).
- *  These are dipole-moment gains (independent of coil factor).
+ *  Original PIDMIMO value (4.373e-5) gives ~0.4 mA proportional current
+ *  at 20° error — too weak for PoCat hardware (0.5 mA dead zone, 3.4 mA
+ *  max dipole).  Increased to 1e-3 so proportional current at 20° error
+ *  is ~1.6 mA (well above dead zone, ~47% of max).
  *
- *  With PoCat S=0.106 the proportional current (~0.4 mA) falls below the
- *  BD2606MVV 0.5 mA dead zone, but dead-zone compensation (snap to ±0.5 mA)
- *  preserves the control direction.  Empirical sweep confirms convergence
- *  to ~10° mean pointing after 10–15 orbits, outperforming all scaled
- *  alternatives (3×, 10×, overdamped) which amplify orbit-period
- *  oscillation through excessive torque.
+ *  Feasible range: [6e-4, 1.6e-2] — lower bound set by dead-zone,
+ *  upper bound by hardware saturation at small errors.
  *
- *  Source: Sim_PID_controller.m → constants.kP */
-#define NADIR_KP    4.373202e-5
+ *  Source: first-principles re-derivation for PoCat coil factor S=0.106 */
+#define NADIR_KP    1.0e-3
 
 /** Rate damping gain kR for magnetic control law [A·m²·s/rad]
  *
- *  Matched to kP via PIDMIMO (ζ=1, ω_n=0.00125 rad/s).
- *  At post-detumble ω≈0.01 rad/s the rate current (~1.8 mA) is well
- *  above the dead zone, providing effective damping.
+ *  With orbital rate compensation, kR damps only the deviation from
+ *  orbit rate.  kR/kP = 90 gives ζ ≈ 1 (critical damping) for
+ *  ω_n ≈ 0.01 rad/s effective bandwidth.
  *
- *  Source: Sim_PID_controller.m → constants.kR */
+ *  Source: first-principles re-derivation for PoCat coil factor S=0.106 */
 #define NADIR_KR    1.907413e-2
+
+/** Gyro low-pass filter time constant [s]
+ *  EMA filter: ω_filt = α·ω_raw + (1-α)·ω_filt_prev
+ *  α = dt/(dt+τ).  τ=10s at dt=1s gives α=0.091, reducing ARW noise
+ *  by ~3.3× while adding ~10s phase lag (acceptable vs 5540s orbit). */
+#define NADIR_GYRO_FILTER_TAU   0.0
 
 /** Body axis to align with nadir direction
  *  +Z body axis points to Earth
@@ -187,20 +191,29 @@ extern "C" {
  * ====================================================================== */
 
 /** Magnetometer RMS noise [T]
- *  Source: Sim_sat_sensors.m → 0.4 mG = 40 nT */
-#define MAG_NOISE_RMS       40.0e-9
+ *  MMC5983MA datasheet: ±0.4 mG = 40 nT raw per sample.
+ *  With on-board averaging of ~100 samples at 10 Hz,
+ *  effective noise ≈ 40/√100 = 4 nT.
+ *  MATLAB reference uses safeFact=0.1 → ~2 nT.
+ *  Use 4 nT (conservative estimate with averaging). */
+#define MAG_NOISE_RMS       4.0e-9
 
 /** Gyroscope Angle Random Walk [rad/s/√Hz]
  *  Source: Sim_sat_sensors.m → 0.038 °/s = 6.63e-4 rad/s */
 #define GYRO_ARW            (0.038 * DEG_TO_RAD)
 
 /** Gyroscope bias instability [rad/s]
- *  Source: Sim_sat_sensors.m */
-#define GYRO_BIAS_STD       (0.1 * DEG_TO_RAD)
+ *  Source: Sim_sat_sensors.m → 0.1°/s * safeFact(0.1) = 0.01°/s */
+#define GYRO_BIAS_STD       (0.01 * DEG_TO_RAD)
+
+/** Gyroscope Rate Random Walk [rad/s/√(s³)]
+ *  Source: Sim_sensors_config_file.m → 0.000133°/√(s³)
+ *  Governs bias drift rate: Δbias per step = RRW * √dt */
+#define GYRO_RRW            (0.000133 * DEG_TO_RAD)
 
 /** Photodiode noise standard deviation [V]
  *  Source: Sim_sat_sensors.m → 20 mV */
-#define PHOTODIODE_NOISE_STD    0.020
+#define PHOTODIODE_NOISE_STD 0.020
 
 #ifdef __cplusplus
 }

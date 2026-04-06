@@ -103,13 +103,17 @@ typedef struct {
 
     /* Estimated attitude */
     quat_t  q_eci_body;             /**< Quaternion ECI → Body */
+    quat_t  q_triad_prev;           /**< Previous TRIAD estimate (for bias est.) */
     vec3d_t omega_body;             /**< Angular velocity in body frame [rad/s] */
+    vec3d_t omega_filtered;         /**< Low-pass filtered gyro (for rate damping) */
+    vec3d_t gyro_bias_est;          /**< Estimated gyro bias [rad/s] */
 
     /* Reference vectors in ECI frame */
     vec3d_t b_field_eci;            /**< Magnetic field in ECI [T] */
     vec3d_t b_field_eci_prev;       /**< Previous B-field in ECI [T] */
     vec3d_t sun_eci;                /**< Sun direction in ECI */
     vec3d_t nadir_eci;              /**< Nadir direction in ECI */
+    vec3d_t nadir_eci_prev;         /**< Previous nadir ECI (for orbit rate est.) */
 
     /* Actuator output */
     mtq_command_t mtq_cmd;

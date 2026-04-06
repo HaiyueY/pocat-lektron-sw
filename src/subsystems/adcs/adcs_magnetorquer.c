@@ -29,29 +29,28 @@ static const double max_dipole[3] = {
 };
 
 /**
- * Quantize a value to the nearest step within [min, max].
+ * Quantize intensity to BD2606MVV driver steps.
+ * Matches MATLAB Nadir_pointing.m L216-233:
+ *   - Round |I| to nearest MTQ_INTENSITY_STEP (0.5 mA)
+ *   - Clamp to [MTQ_MIN_INTENSITY, MTQ_MAX_INTENSITY] (0.5–150 mA)
+ *   - Preserve sign
+ * The snap-to-minimum ensures every axis always produces torque.
  */
 static double quantize_intensity(double raw_ma)
 {
-    double sign_val = (raw_ma >= 0.0) ? 1.0 : -1.0;
-    double abs_val = fabs(raw_ma);
+    double sign_i = (raw_ma >= 0.0) ? 1.0 : -1.0;
+    double abs_ma = fabs(raw_ma);
 
-    /* Quantize to nearest step */
-    double quantized = round(abs_val / MTQ_INTENSITY_STEP_MA) * MTQ_INTENSITY_STEP_MA;
+    /* Round to nearest step */
+    double quantized = round(abs_ma / MTQ_INTENSITY_STEP_MA) * MTQ_INTENSITY_STEP_MA;
 
-    /* Dead-zone compensation: if controller requests non-zero output but
-     * quantization rounds to below minimum, snap to minimum intensity.
-     * This preserves the control direction and prevents open-loop drift.
-     * Matches MATLAB reference: max(quantized, min_intensity_mA).
-     * See docs/adcs_nadir_gain_quantization_analysis.md §6. */
-    if (quantized < MTQ_MIN_INTENSITY_MA) {
-        quantized = (abs_val > 1.0e-12) ? MTQ_MIN_INTENSITY_MA : 0.0;
-    }
-    if (quantized > MTQ_MAX_INTENSITY_MA) {
+    /* Clamp to [min, max] — always at least min_intensity */
+    if (quantized < MTQ_MIN_INTENSITY_MA)
+        quantized = MTQ_MIN_INTENSITY_MA;
+    if (quantized > MTQ_MAX_INTENSITY_MA)
         quantized = MTQ_MAX_INTENSITY_MA;
-    }
 
-    return sign_val * quantized;
+    return sign_i * quantized;
 }
 
 void mtq_compute_command(vec3d_t desired_dipole, mtq_command_t *cmd)
