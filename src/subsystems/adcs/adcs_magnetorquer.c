@@ -39,9 +39,13 @@ static double quantize_intensity(double raw_ma)
     /* Quantize to nearest step */
     double quantized = round(abs_val / MTQ_INTENSITY_STEP_MA) * MTQ_INTENSITY_STEP_MA;
 
-    /* Clamp to [min, max] range */
+    /* Dead-zone compensation: if controller requests non-zero output but
+     * quantization rounds to below minimum, snap to minimum intensity.
+     * This preserves the control direction and prevents open-loop drift.
+     * Matches MATLAB reference: max(quantized, min_intensity_mA).
+     * See docs/adcs_nadir_gain_quantization_analysis.md §6. */
     if (quantized < MTQ_MIN_INTENSITY_MA) {
-        quantized = 0.0;  /* Below minimum: turn off */
+        quantized = (abs_val > 1.0e-12) ? MTQ_MIN_INTENSITY_MA : 0.0;
     }
     if (quantized > MTQ_MAX_INTENSITY_MA) {
         quantized = MTQ_MAX_INTENSITY_MA;

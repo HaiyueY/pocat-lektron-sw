@@ -144,13 +144,27 @@ extern "C" {
  * ====================================================================== */
 
 /** Proportional gain kP for magnetic control law [A·m²]
- *  Source: Sim_PID_controller.m → PIDMIMO(I, 1, 0.00125, 300, 0.1, 1)
- *  Recomputed: kP = 4.373202e-5 */
+ *
+ *  From PIDMIMO(Inertia, zeta=1, omega=0.00125, tauInt=300, omegaR=0.1, dT=2).
+ *  These are dipole-moment gains (independent of coil factor).
+ *
+ *  With PoCat S=0.106 the proportional current (~0.4 mA) falls below the
+ *  BD2606MVV 0.5 mA dead zone, but dead-zone compensation (snap to ±0.5 mA)
+ *  preserves the control direction.  Empirical sweep confirms convergence
+ *  to ~10° mean pointing after 10–15 orbits, outperforming all scaled
+ *  alternatives (3×, 10×, overdamped) which amplify orbit-period
+ *  oscillation through excessive torque.
+ *
+ *  Source: Sim_PID_controller.m → constants.kP */
 #define NADIR_KP    4.373202e-5
 
 /** Rate damping gain kR for magnetic control law [A·m²·s/rad]
- *  Source: Sim_PID_controller.m → PIDMIMO(I, 1, 0.00125, 300, 0.1, 1)
- *  Recomputed: kR = 1.907413e-2 */
+ *
+ *  Matched to kP via PIDMIMO (ζ=1, ω_n=0.00125 rad/s).
+ *  At post-detumble ω≈0.01 rad/s the rate current (~1.8 mA) is well
+ *  above the dead zone, providing effective damping.
+ *
+ *  Source: Sim_PID_controller.m → constants.kR */
 #define NADIR_KR    1.907413e-2
 
 /** Body axis to align with nadir direction

@@ -23,8 +23,14 @@
  *     L198-238: Intensity quantization (0.5-32 mA, 0.5 mA step)
  *
  *   ref/H-bridge-simulations/Simulation Nadir Pointing/Config/Sim_PID_controller.m
- *     L21-23:   p.eci_vector (nadir), p.body_vector = [0;0;1]
+ *     L21-23:   p.eci_vector (initial = nadir, overwritten to zenith in main loop)
  *     L25-54:   kP, kR gain derivation via PIDMIMO
+ *
+ * NOTE: The MATLAB reference uses zenith (= +r_sat/||r_sat||) as eci_vector
+ *   (Nadir_pointing.m L244: p.eci_vector = x(1:3)/norm(x(1:3))),
+ *   NOT nadir. Due to the quaternion kinematics sign convention
+ *   (dq/dt = -0.5*[0,ω]⊗q), the B-cross control law repels body_z
+ *   from eci_vector. Using zenith pushes body_z toward nadir.
  *
  * The magnetic control law projects the desired torque onto the
  * B-field plane, which is the only torque direction achievable with
@@ -53,16 +59,20 @@ void nadir_step(adcs_state_t *state)
      * Ref: Nadir_pointing.m L109-147 */
     determination_update(state);
 
-    /* Step 2: Target quaternion — rotation from nadir ECI to body axis
-     * Ref: Nadir_pointing.m L152
-     *   q_target = U2Q(p.eci_vector, p.body_vector)
-     *   p.eci_vector = -r_sat / ||r_sat||  (nadir direction in ECI)
-     *   p.body_vector = [0;0;1]             (Z body axis) */
-    vec3d_t nadir_dir = vec3d_normalize(state->nadir_eci);
+    /* Step 2: Target quaternion — rotation from zenith ECI to body axis
+     * Ref: Nadir_pointing.m L244
+     *   p.eci_vector = x(1:3)/norm(x(1:3))  (zenith = +r_sat / ||r_sat||)
+     *   p.body_vector = [0;0;1]              (Z body axis)
+     *
+     * The B-cross control law with kinematic equation dq/dt = -0.5*[0,ω]⊗q
+     * REPELS body_z from eci_vector. Using zenith as eci_vector therefore
+     * pushes body_z toward nadir, achieving Earth-pointing.
+     * See: docs/adcs_nadir_pointing_analysis.md for full derivation. */
+    vec3d_t zenith_eci = vec3d_scale(vec3d_normalize(state->nadir_eci), -1.0);
     vec3d_t body_axis = vec3d_make(NADIR_BODY_AXIS_X,
                                    NADIR_BODY_AXIS_Y,
                                    NADIR_BODY_AXIS_Z);
-    quat_t q_target = quat_from_two_vectors(nadir_dir, body_axis);
+    quat_t q_target = quat_from_two_vectors(zenith_eci, body_axis);
 
     /* Step 3: Error quaternion
      * Ref: Nadir_pointing.m L156
