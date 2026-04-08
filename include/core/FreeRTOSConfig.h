@@ -57,6 +57,8 @@
 #define CMSIS_device_header "stm32l4xx.h"
 #endif /* CMSIS_device_header */
 
+#define configCHECK_FOR_STACK_OVERFLOW            1
+
 #define configENABLE_FPU                         0
 #define configENABLE_MPU                         0
 

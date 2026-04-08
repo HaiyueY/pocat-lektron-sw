@@ -45,7 +45,12 @@
 #define N_COMMS_NEW_PARAMS               (1u << 1)  /**< New parameter set available in memory */
 #define N_COMMS_STOP_RF                  (1u << 2)  /**< Stop RF transmission */
 #define N_COMMS_RESUME_RF                (1u << 3)  /**< Resume RF transmission */
-#define N_COMMS_TRANSMIT_BEACON          (1u << 4)  /**< Transmit the beacon */
+#define N_COMMS_TRANSMIT_BEACON          (1u << 4)  /**< Transmit the beacon (deprecated: use beacon timeout) */
+
+/* ── Transceiver Task Notifications ────────────────────────────────────────── */
+
+#define N_TRANSCEIVER_RADIO_IRQ_BIT      (1u << 0)  /**< DIO1 hardware interrupt: RX_DONE or TX_DONE */
+#define N_TRANSCEIVER_TX_READY_BIT       (1u << 1)  /**< TX packet available in tx_queue */
 
 /* ── EPS Task Notifications ─────────────────────────────────────────────── */
 

@@ -17,6 +17,7 @@
 #include "obdh.h"
 #include "payload.h"
 #include "adcs.h"
+#include "transceiver.h"
 #include "health.h"
 #include "flash.h"
 #include <stdio.h>
@@ -27,14 +28,16 @@ static TaskHandle_t eps_task_handle;
 static TaskHandle_t comms_task_handle;
 static TaskHandle_t adcs_task_handle;
 static TaskHandle_t obdh_task_handle;
+static TaskHandle_t transceiver_task_handle;
 
 /* ---- Public getters ---- */
 
-TaskHandle_t obc_get_comms_handle(void)   { return comms_task_handle; }
-TaskHandle_t obc_get_eps_handle(void)     { return eps_task_handle; }
-TaskHandle_t obc_get_obdh_handle(void)    { return obdh_task_handle; }
-TaskHandle_t obc_get_adcs_handle(void)    { return adcs_task_handle; }
-TaskHandle_t obc_get_payload_handle(void) { return payload_task_handle; }
+TaskHandle_t obc_get_comms_handle(void)       { return comms_task_handle; }
+TaskHandle_t obc_get_eps_handle(void)         { return eps_task_handle; }
+TaskHandle_t obc_get_obdh_handle(void)        { return obdh_task_handle; }
+TaskHandle_t obc_get_adcs_handle(void)        { return adcs_task_handle; }
+TaskHandle_t obc_get_payload_handle(void)     { return payload_task_handle; }
+TaskHandle_t obc_get_transceiver_handle(void) { return transceiver_task_handle; }
 
 /* ---- Private function definitions ---- */
 
@@ -86,6 +89,16 @@ static BaseType_t create_obdh_task(void)
     if (ok == pdPASS)
     {
         health_set_expected(health_get_expected() | HEALTH_BIT_OBDH);
+    }
+    return ok;
+}
+
+static BaseType_t create_transceiver_task(void)
+{
+    BaseType_t ok = xTaskCreate(transceiver_task, "TRANSCEIVER", TRANSCEIVER_STACK_SIZE, NULL, TRANSCEIVER_PRIORITY, &transceiver_task_handle);
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_COMMS);
     }
     return ok;
 }
@@ -195,6 +208,27 @@ void tm_reset_obdh_task(void)
     }
 }
 
+void tm_reset_transceiver_task(void)
+{
+    if (transceiver_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(transceiver_task_handle);
+    vTaskDelete(transceiver_task_handle);
+    transceiver_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_transceiver_task();
+
+    if (ok != pdPASS)
+    {
+        printf("Error recreating transceiver task\r\n");
+    }
+}
+
 BaseType_t tm_create_all_tasks(void)
 {
     BaseType_t ok = pdPASS;
@@ -230,6 +264,13 @@ BaseType_t tm_create_all_tasks(void)
     if (ok != pdPASS)
     {
         printf("Error creating obdh task\r\n");
+        return ok;
+    }
+
+    ok = create_transceiver_task();
+    if (ok != pdPASS)
+    {
+        printf("Error creating transceiver task\r\n");
         return ok;
     }
 

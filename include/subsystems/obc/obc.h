@@ -19,22 +19,24 @@
 // TODO: revisar stack sizes y prioridades!
 
 // Task stack sizes
-#define OBC_STACK_SIZE      1024  
-#define PAYLOAD_STACK_SIZE  1024  
-#define EPS_STACK_SIZE      1024
-#define COMMS_STACK_SIZE    1024   
-#define ADCS_STACK_SIZE     1024
-#define OBDH_STACK_SIZE     1024   
+#define OBC_STACK_SIZE       1024
+#define PAYLOAD_STACK_SIZE   512
+#define EPS_STACK_SIZE       512
+#define COMMS_STACK_SIZE     1024
+#define ADCS_STACK_SIZE      1024
+#define OBDH_STACK_SIZE      1024
+#define TRANSCEIVER_STACK_SIZE 1024
 
 
 
 // Task priorities
-#define OBC_PRIORITY        2
-#define PAYLOAD_PRIORITY    1
-#define EPS_PRIORITY        1
-#define COMMS_PRIORITY      1
-#define ADCS_PRIORITY       1
-#define OBDH_PRIORITY       1
+#define OBC_PRIORITY         2
+#define PAYLOAD_PRIORITY     1
+#define EPS_PRIORITY         1
+#define COMMS_PRIORITY       1
+#define ADCS_PRIORITY        1
+#define OBDH_PRIORITY        1
+#define TRANSCEIVER_PRIORITY 1
 
 /**
  * @brief OBC task entry point — runs the OBC state machine.
@@ -42,13 +44,14 @@
 void obc_task(void *pv_parameters);
 
 /** @name Subsystem task handle getters
- *  Used by the TC handler to send notifications to the correct task.
+ *  Used by the TC handler and other tasks to send notifications.
  *  Handles are valid once obc_task has finished setup_obc().
  * @{ */
 TaskHandle_t obc_get_comms_handle(void);
 TaskHandle_t obc_get_eps_handle(void);
 TaskHandle_t obc_get_obdh_handle(void);
 TaskHandle_t obc_get_payload_handle(void);
+TaskHandle_t obc_get_transceiver_handle(void);
 /** @} */
 
 #endif /* INC_OBC_H_ */

@@ -38,10 +38,20 @@ static float bwCodeToKHz(uint8_t bw_code) {
 }
 
 static SemaphoreHandle_t s_dutyCycleSem = NULL;
+static TaskHandle_t s_irqTask = NULL;
+
+#define TRANSCEIVER_RADIO_IRQ_BIT   (1UL << 0)
 
 static void dutyCycleIsrCallback(void) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(s_dutyCycleSem, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+static void radioIrqCallback(void) {
+    if (s_irqTask == NULL) return;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xTaskNotifyFromISR(s_irqTask, TRANSCEIVER_RADIO_IRQ_BIT, eSetBits, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
@@ -357,6 +367,45 @@ extern "C" { // to stop name mangling
     void RadioLib_IrqProcess(void) {
         // De moment no fa falta implementar res aqui ja que radiolib gestiona els interrupts internament.
         // No obstant, si ens posem en un mode no bloquejant, potser caldra implementar alguna cosa aqui.
+    }
+
+    /* ===== Async interrupt-driven API ===== */
+
+    void RadioLib_SetIrqTask(void *handle) {
+        s_irqTask = (TaskHandle_t)handle;
+        hal.attachInterrupt(mod.getIrq(), radioIrqCallback, hal.GpioInterruptRising);
+    }
+
+    int16_t RadioLib_StartReceive(uint16_t preambleLen) {
+        int16_t state = radio.startReceiveDutyCycleAuto(
+            preambleLen, 0,
+            RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
+            RADIOLIB_IRQ_RX_DEFAULT_MASK);
+        return state;
+    }
+
+    int16_t RadioLib_StartTransmit(uint8_t *buf, uint16_t len) {
+        int16_t state = radio.startTransmit(buf, len);
+        return state;
+    }
+
+    uint32_t RadioLib_GetIrqFlags(void) {
+        return radio.getIrqFlags();
+    }
+
+    void RadioLib_ClearIrqFlags(uint32_t mask) {
+        radio.clearIrqFlags(mask);
+    }
+
+    int16_t RadioLib_ReadRxData(uint8_t *outBuf, uint16_t bufSize,
+                                uint16_t *outLen, int16_t *outRssi, int8_t *outSnr) {
+        int16_t st = radio.readData(outBuf, bufSize);
+        if (st == RADIOLIB_ERR_NONE) {
+            if (outLen)  *outLen  = radio.getPacketLength();
+            if (outRssi) *outRssi = radio.getRSSI();
+            if (outSnr)  *outSnr  = radio.getSNR();
+        }
+        return st;
     }
 
 }
