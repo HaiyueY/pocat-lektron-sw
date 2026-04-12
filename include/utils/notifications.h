@@ -16,6 +16,8 @@
 
 /* ── General Task Notifications ─────────────────────────────────────────── */
 #define N_FLASH_OPERATION_COMPLETE         (1u << 31)  /**< Flash operation completed (success or failure) */
+#define N_TASK_PAUSE                       (1u << 30)  /**< OBC requests task to quiesce and ACK */
+#define N_TASK_RESUME                      (1u << 29)  /**< OBC signals task to resume normal operation */
 
 /* ── ADCS Task Notifications ────────────────────────────────────────────── */
 
@@ -38,6 +40,14 @@
 
 #define N_OBC_EXIT_STATE_GROUP_MASK (N_OBC_EXIT_STATE_TO_NOMINAL | N_OBC_EXIT_STATE_TO_CONTINGENCY | \
                                 N_OBC_EXIT_STATE_TO_SUNSAFE | N_OBC_EXIT_STATE_TO_SURVIVAL)
+
+#define N_OBC_ACK_PAYLOAD                  (1u << 8)   /**< PAYLOAD acknowledged PAUSE */
+#define N_OBC_ACK_EPS                      (1u << 9)   /**< EPS acknowledged PAUSE */
+#define N_OBC_ACK_COMMS                    (1u << 10)  /**< COMMS acknowledged PAUSE */
+#define N_OBC_ACK_ADCS                     (1u << 11)  /**< ADCS acknowledged PAUSE */
+#define N_OBC_ACK_OBDH                     (1u << 12)  /**< OBDH acknowledged PAUSE */
+#define N_OBC_ACK_ALL_MASK                 (N_OBC_ACK_PAYLOAD | N_OBC_ACK_EPS | \
+                                            N_OBC_ACK_COMMS | N_OBC_ACK_ADCS | N_OBC_ACK_OBDH)
 
 /* ── COMMS Task Notifications ───────────────────────────────────────────── */
 
