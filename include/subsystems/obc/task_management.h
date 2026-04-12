@@ -24,6 +24,11 @@
 BaseType_t tm_create_all_tasks(void);
 
 /**
+ * @brief Request every managed subsystem task to pause.
+ */
+void tm_pause_all_tasks(void);
+
+/**
  * @brief Reset the payload task by suspending, deleting, and recreating it.
  */
 void tm_reset_payload_task(void);

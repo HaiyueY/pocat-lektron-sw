@@ -19,7 +19,11 @@
 #include "adcs.h"
 #include "health.h"
 #include "flash.h"
+#include "notifications.h"
+#include "events.h"
 #include <stdio.h>
+
+#define TM_PAUSE_ACK_TIMEOUT_MS 10000u
 
 /* ---- Module-level variables ---- */
 static TaskHandle_t payload_task_handle;
@@ -27,6 +31,8 @@ static TaskHandle_t eps_task_handle;
 static TaskHandle_t comms_task_handle;
 static TaskHandle_t adcs_task_handle;
 static TaskHandle_t obdh_task_handle;
+
+EventGroupHandle_t task_events_handle = NULL;
 
 /* ---- Public getters ---- */
 
@@ -37,6 +43,20 @@ TaskHandle_t obc_get_adcs_handle(void)    { return adcs_task_handle; }
 TaskHandle_t obc_get_payload_handle(void) { return payload_task_handle; }
 
 /* ---- Private function definitions ---- */
+
+static BaseType_t create_task_events(void)
+{
+    if (task_events_handle == NULL)
+    {
+        task_events_handle = xEventGroupCreate();
+        if (task_events_handle == NULL)
+        {
+            printf("Error creating task event group\r\n");
+            return pdFAIL;
+        }
+    }
+    return pdTRUE;
+}
 
 static BaseType_t create_payload_task(void)
 {
@@ -199,6 +219,14 @@ BaseType_t tm_create_all_tasks(void)
 {
     BaseType_t ok = pdPASS;
 
+    ok = create_task_events(); // create event group for task acks
+
+    if (ok != pdPASS)
+    {
+        printf("Error creating task event group\r\n");
+        return ok;
+    }
+
     ok = create_payload_task();
     if (ok != pdPASS)
     {
@@ -236,3 +264,32 @@ BaseType_t tm_create_all_tasks(void)
     return pdPASS;
 }
 
+void tm_pause_all_tasks(void)
+{
+
+    xEventGroupClearBits(task_events_handle, EV_TASK_ACK_ALL_MASK);
+
+    xTaskNotify(payload_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(eps_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(comms_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(adcs_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(obdh_task_handle, N_TASK_PAUSE, eSetBits);
+
+    EventBits_t expected_acks = EV_TASK_PAUSE_ACK_PAYLOAD
+                             | EV_TASK_PAUSE_ACK_EPS
+                             | EV_TASK_PAUSE_ACK_COMMS
+                             | EV_TASK_PAUSE_ACK_ADCS
+                             | EV_TASK_PAUSE_ACK_OBDH;
+
+    EventBits_t acks = xEventGroupWaitBits(task_events_handle,
+                                           EV_TASK_ACK_ALL_MASK,
+                                           pdTRUE,
+                                           pdTRUE,
+                                           pdMS_TO_TICKS(TM_PAUSE_ACK_TIMEOUT_MS));
+
+    if ((acks & expected_acks) != expected_acks)
+    {
+        printf("tm: PAUSE ACK timeout, missing: 0x%08lX\r\n",
+               (unsigned long)(expected_acks & ~acks));
+    }
+}
