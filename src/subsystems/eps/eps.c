@@ -12,10 +12,13 @@
  */
 
 #include "eps.h"
+#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include "health.h"
 #include "flash.h"
 #include "notifications.h"
+#include "events.h"
 
 // The main functionality of the EPS task is providing the OBC with battery readings on 
 // it's voltage, current generated, capacity, temperature and charging status. The task 
@@ -24,7 +27,10 @@
 // Function prototypes
 static void setup_eps(void);
 static void process_eps(void);
-static void eps_process_notifications(void);
+static uint32_t wait_for_notification(void);
+
+static bool paused;
+static uint32_t deferred_notifications;
 
 void eps_task(void *pv_parameters)
 {
@@ -42,31 +48,32 @@ void eps_task(void *pv_parameters)
 static void setup_eps(void)
 {
     printf("Setting up EPS...\r\n");
+    paused = false;
+    deferred_notifications = 0;
     // Apply the default configuration
 }
 
 static void process_eps(void)
 {
+    uint32_t notifications = wait_for_notification();
 
-    // printf("Processing EPS...\n");
-    // 1. Checks EPS notifications (DOESN'T BLOCK) to see whether to perform notification actions
-    eps_process_notifications();
+    if (paused) {
+        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        if (notifications & N_TASK_RESUME) {
+            paused = false;
+            notifications = deferred_notifications;
+            deferred_notifications = 0;
+        }
+        else return;
+    }
 
-    // If there are actions to be taken, process them accordingly.
+    if (notifications & N_TASK_PAUSE) {
+        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        paused = true;
+        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_EPS);
+        return;
+    }
 
-    // 2. Poll battery sensor (DS2782E+) for voltage, current and capacity. This IC is 
-    // connected to the IC2 line 1 (SCL1,SDA1).
-
-    // 3. Send to OBDH task for it to store to flash 
-
-    // 4. Update EPS Event Group bits with the current battery conditions 
-
-}
-
-static void eps_process_notifications(void)
-{
-    uint32_t notifications = 0;
-    xTaskNotifyWait(0, UINT32_MAX, &notifications, 0);
     if (notifications & N_EPS_NEW_THRESHOLDS) {
         uint8_t thresholds[3] = {0}; // TODO define default theshholds in case of read failure
         OBDH_Read_Request(EPS_THRESHOLDS_ADDR, thresholds, 3); 
@@ -86,4 +93,18 @@ static void eps_process_notifications(void)
     }
 
     // Process other notifications as needed
+
+    // 2. Poll battery sensor (DS2782E+) for voltage, current and capacity. This IC is
+    // connected to the IC2 line 1 (SCL1,SDA1).
+
+    // 3. Send to OBDH task for it to store to flash
+
+    // 4. Update EPS Event Group bits with the current battery conditions
+}
+
+static uint32_t wait_for_notification(void)
+{
+    uint32_t notificationValue = 0;
+    xTaskNotifyWait(0, 0xFFFFFFFF, &notificationValue, 0);
+    return notificationValue;
 }

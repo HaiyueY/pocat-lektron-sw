@@ -8,12 +8,14 @@
 #include "tc_handler.h"
 #include "radiolib_wrapper.h"
 #include "health.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "interleaving.h"
 #include "beacon.h"
 #include "notifications.h"
+#include "events.h"
 
 
 /* ---- Macros and constants ---- */
@@ -43,6 +45,8 @@
 
 // COMMS State Machine starts in startup state
 static CommsState_t CommsState = SLEEP;
+static bool paused;
+static uint32_t deferred_notifications;
 
 
 static CommsPackets_t CommsPackets = {
@@ -77,6 +81,7 @@ void process_comms(void);
 void state_sleep(void);
 void state_process(void);
 void state_transmit(void);
+static uint32_t wait_for_notification(void);
 
 
 // DEFINITIONS
@@ -89,12 +94,15 @@ void comms_task(void *pv_parameters)
     {
         process_comms();
         health_kick(HEALTH_BIT_COMMS);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 void setup_comms(void)
 {
     // Apply the default configuration
+    paused = false;
+    deferred_notifications = 0;
 
     // RadioEvents.TxDone = OnTxDone; 
     // RadioEvents.RxDone = OnRxDone; 
@@ -141,6 +149,25 @@ void process_comms(void)
     // if N_COMMS_STOP_RF           Stop RF transmission
     // if N_COMMS_RESUME_RF         Resume RF transmission
 
+    uint32_t notif = wait_for_notification();
+
+    if (paused) {
+        deferred_notifications |= notif & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        if (notif & N_TASK_RESUME) {
+            paused = false;
+            notif = deferred_notifications;
+            deferred_notifications = 0;
+        }
+        else return;
+    }
+
+    if (notif & N_TASK_PAUSE) {
+        deferred_notifications |= notif & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        paused = true;
+        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_COMMS);
+        return;
+    }
+
     switch(CommsState)
     {
         case SLEEP:
@@ -153,9 +180,6 @@ void process_comms(void)
             state_transmit(); break;
     }
 
-    uint32_t notif = 0;
-    xTaskNotifyWait(0, N_COMMS_TRANSMIT_BEACON, &notif, 0);
-
     if (notif & N_COMMS_TRANSMIT_BEACON) {
         send_beacon();
         if (CommsState == SLEEP) {
@@ -163,6 +187,13 @@ void process_comms(void)
         }
     }
 
+}
+
+static uint32_t wait_for_notification(void)
+{
+    uint32_t notificationValue = 0;
+    xTaskNotifyWait(0, 0xFFFFFFFF, &notificationValue, 0);
+    return notificationValue;
 }
 
 

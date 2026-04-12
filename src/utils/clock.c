@@ -25,16 +25,10 @@ static void reconfigure_peripherals(ClockFreq_t freq);
 bool clock_switch_for_state(ObcState_t state)
 {
     ClockFreq_t target = state_to_freq(state);
-
-    if (target == current_freq) {
-        return true;
-    }
+    if (target == current_freq) { return true; }
 
     bool ok;
     
-    // revisar esta parte....
-    vTaskSuspendAll();
-
     if (target == CLK_FREQ_80MHZ) {
         ok = switch_to_80mhz();
     } else {
@@ -52,8 +46,6 @@ bool clock_switch_for_state(ObcState_t state)
         current_freq = target;
     }
 
-    // revisar esta parte....
-    xTaskResumeAll();
     return ok;
 }
 
@@ -165,8 +157,8 @@ static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
         return false;
     }
 
-    /* Step 6: Enter Low-Power Run mode at 2 MHz for maximum power savings.
-     * At 8 MHz we stay in normal Run mode (LP Run is only valid up to 2 MHz). */
+    /* Step 6: Enter Low-Power run mode at 2 MHz for maximum power savings.
+     * At 8 MHz we stay in normal Run mode (Low-Power run mode is only valid up to 2 MHz). */
     if (msi_range == RCC_MSIRANGE_5) {
         HAL_PWREx_EnableLowPowerRunMode();
     }

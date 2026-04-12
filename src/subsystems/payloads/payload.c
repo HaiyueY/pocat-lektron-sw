@@ -11,9 +11,12 @@
 
 
 /* ---- Includes ---- */
+#include <stdbool.h>
 #include "FreeRTOS.h"
 #include "main.h"
 #include "health.h"
+#include "notifications.h"
+#include "events.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -23,6 +26,8 @@
 
 /* ---- Module-level variables ---- */
 // ..
+static bool paused;
+static uint32_t deferred_notifications;
 
 /* ---- Private function prototypes ---- */
 static void setup_payload(void);
@@ -47,17 +52,36 @@ void payload_task(void *pv_parameters) {
 
 /* ---- Private function definitions ---- */
 
-void setup_payload(void) {
+static void setup_payload(void) {
 
     // Apply default configuration
     // ...
+    paused = false;
+    deferred_notifications = 0;
     printf("Setting up PAYLOAD...\r\n");
     
 }
 
-void process_payload(void) {
+static void process_payload(void) {
 
     uint32_t notificationValue = wait_for_notification();
+
+    if (paused) {
+        deferred_notifications |= notificationValue & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        if (notificationValue & N_TASK_RESUME) {
+            paused = false;
+            notificationValue = deferred_notifications;
+            deferred_notifications = 0;
+        }
+        else return;
+    }
+
+    if (notificationValue & N_TASK_PAUSE) {
+        deferred_notifications |= notificationValue & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        paused = true;
+        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_PAYLOAD);
+        return;
+    }
 
     // if (notificationValue & PAYLOAD_PHOTO_CAPTURE) {
     //     capture_photo();
@@ -66,7 +90,7 @@ void process_payload(void) {
 
 }
 
-uint32_t wait_for_notification(void) {
+static uint32_t wait_for_notification(void) {
 
     uint32_t notificationValue = 0;
     xTaskNotifyWait( 0,          // don't clear on entry
@@ -77,7 +101,7 @@ uint32_t wait_for_notification(void) {
 
 }
 
-void capture_photo(void) {
+static void capture_photo(void) {
 
     //     /* 1. Initialize camera with current settings */
     // initCam(huart4, resolution, compressibility, info);

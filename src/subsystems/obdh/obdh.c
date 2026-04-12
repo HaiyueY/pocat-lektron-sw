@@ -14,6 +14,7 @@
 
 /* ---- Includes ---- */
 #include "obdh.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include "health.h"
 #include <stdint.h>
@@ -22,6 +23,7 @@
 #include "queue.h"
 #include "flash.h"
 #include "notifications.h"
+#include "events.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -32,9 +34,12 @@
 /* ---- Module-level variables ---- */
 // ..
 QueueHandle_t obdh_queue_handle;
+static bool paused;
+static uint32_t deferred_notifications;
 /* ---- Private function prototypes ---- */
 void setup_obdh(void);
 void process_obdh(void);
+static uint32_t wait_for_notification(void);
 
 
 /* ---- Public function definitions ---- */
@@ -44,22 +49,24 @@ void obdh_task(void *pv_parameters) {
     setup_obdh();
 
     for (;;) {
-        process_obdh(); // Blocks for 1 second, waiting for requests from the OBC task. If a request is received, it processes it and notifies the OBC task when done.
+        process_obdh(); 
         health_kick(HEALTH_BIT_OBDH);
-        
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
 }
-
 
 /* ---- Private function definitions ---- */
 
 void setup_obdh(void) {
 
     printf("Setting up OBDH...\r\n");
+    paused = false;
+    deferred_notifications = 0;
     // Apply the default configuration
 
 }
+
 /**
  * @brief This process waits for an element of the queue to be recived,
  * a request. The request can be to read flash or to write flash.
@@ -67,9 +74,31 @@ void setup_obdh(void) {
  * given to the OBC with an event. 
  */
 void process_obdh(void) {
+
+    uint32_t notifications = 0;
+    //printf("Processing OBDH...\n");
+
+    notifications = wait_for_notification();
+
+    if (paused) {
+        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        if (notifications & N_TASK_RESUME) {
+            paused = false;
+            notifications = deferred_notifications;
+            deferred_notifications = 0;
+        }
+        else return;
+    }
+
+    if (notifications & N_TASK_PAUSE) {
+        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
+        paused = true;
+        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_OBDH);
+        return;
+    }
+
     obdh_request request;
     HAL_StatusTypeDef status=HAL_OK;
-    //printf("Processing OBDH...\n");
 
     BaseType_t result_queue= xQueueReceive(obdh_queue_handle,&request,pdMS_TO_TICKS(1000));
     if (result_queue== pdPASS)
@@ -105,4 +134,11 @@ void process_obdh(void) {
         }
         
     }
+}
+
+static uint32_t wait_for_notification(void)
+{
+    uint32_t notificationValue = 0;
+    xTaskNotifyWait(0, 0xFFFFFFFF, &notificationValue, 0);
+    return notificationValue;
 }

@@ -27,6 +27,41 @@ void state_machine_init(ObcState_t *currentState) {
 static void change_state(ObcState_t *currentState, ObcState_t newState)
 {
     OBDH_Write_Request(PREVIOUS_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t)); // Store the current state in flash
+    
+    tm_pause_all_tasks();
+    
+    vTaskSuspendAll(); // revisar
+    clock_switch_for_state(newState);
+    xTaskResumeAll(); // revisar
+
+    if (*currentState == CONTINGENCY && newState == NOMINAL) {
+        tm_resume_all_tasks();
+        // return COMMS to NOMINAL mode
+        // return ADCS to NOMINAL mode
+    }
+    else {
+        tm_resume_eps_task();
+        tm_resume_comms_task();
+        tm_resume_adcs_task();
+        tm_resume_obdh_task();
+        if (*currentState == NOMINAL && newState == CONTINGENCY) {
+            // COMMS beacon only
+            // ADCS detumbling only
+        }
+        else if (*currentState == CONTINGENCY && newState == SUNSAFE) {
+            // ADCS only idle
+        }
+        else if (*currentState == SUNSAFE && newState == SURVIVAL) {
+            // COMMS RX only
+        }
+        else if (*currentState == SURVIVAL && newState == SUNSAFE) {
+            // COMMS beacon only
+        }
+        else if (*currentState == SUNSAFE && newState == CONTINGENCY) {
+            // ADCS detumbling only
+        }
+    }
+    
     *currentState = newState;  
     OBDH_Write_Request(CURRENT_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t)); // Update the current state in flash
     state_operations_at_beginning(currentState);
