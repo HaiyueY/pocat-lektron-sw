@@ -29,12 +29,14 @@
 
 
 // Task priorities
-#define OBC_PRIORITY        2
+#define OBC_PRIORITY        6
+#define OBDH_PRIORITY       5
+#define COMMS_PRIORITY      4
+#define EPS_PRIORITY        3
+#define ADCS_PRIORITY       2
 #define PAYLOAD_PRIORITY    1
-#define EPS_PRIORITY        1
-#define COMMS_PRIORITY      1
-#define ADCS_PRIORITY       1
-#define OBDH_PRIORITY       1
+
+
 
 /**
  * @brief OBC task entry point — runs the OBC state machine.
