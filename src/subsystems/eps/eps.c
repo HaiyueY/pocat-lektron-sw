@@ -40,14 +40,12 @@ void eps_task(void *pv_parameters)
         process_eps();
         health_kick(HEALTH_BIT_EPS);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        //printf("EPS loop\r\n");
     }
 
 }
 
 static void setup_eps(void)
 {
-    printf("Setting up EPS...\r\n");
     paused = false;
     deferred_notifications = 0;
     // Apply the default configuration

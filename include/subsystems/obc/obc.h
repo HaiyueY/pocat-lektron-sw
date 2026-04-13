@@ -37,7 +37,6 @@
 #define PAYLOAD_PRIORITY    1
 
 
-
 /**
  * @brief OBC task entry point — runs the OBC state machine.
  */

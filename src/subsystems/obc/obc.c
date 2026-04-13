@@ -38,7 +38,6 @@
 static void setup_obc(void);
 static void process_obc(ObcState_t *currentState);
 
-static void change_to_state(ObcState_t *currentState);
 static uint32_t process_obc_notifications(void);
 
 static void handle_health_faults(EventBits_t faults);
@@ -61,6 +60,8 @@ void obc_task(void *pv_parameters) {
            handle_health_faults(faults);
        }
        vTaskDelay(pdMS_TO_TICKS(2000)); // Delay to prevent busy looping, adjust as needed  
+       
+       printf("OBC loop\r\n");
     }
 
 }
@@ -108,7 +109,7 @@ static void process_obc(ObcState_t *currentState) {
 
 static uint32_t process_obc_notifications(void) {
 
-    uint32_t notificationValue;
+    uint32_t notificationValue = 0;
     xTaskNotifyWait( 0,          // don't clear on entry
                     0xFFFFFFFF, // clear all bits on exit
                     &notificationValue,

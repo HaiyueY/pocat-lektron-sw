@@ -45,6 +45,9 @@ bool clock_switch_for_state(ObcState_t state)
         reconfigure_peripherals(target);
         current_freq = target;
     }
+    else {
+        printf("Clock switch failed\r\n");
+    }
 
     return ok;
 }

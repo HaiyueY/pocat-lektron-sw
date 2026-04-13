@@ -59,8 +59,6 @@ void obdh_task(void *pv_parameters) {
 /* ---- Private function definitions ---- */
 
 void setup_obdh(void) {
-
-    printf("Setting up OBDH...\r\n");
     paused = false;
     deferred_notifications = 0;
     // Apply the default configuration
@@ -76,8 +74,6 @@ void setup_obdh(void) {
 void process_obdh(void) {
 
     uint32_t notifications = 0;
-    //printf("Processing OBDH...\n");
-
     notifications = wait_for_notification();
 
     if (paused) {
@@ -96,7 +92,7 @@ void process_obdh(void) {
         xEventGroupSetBits(task_events_handle, EV_TASK_ACK_OBDH);
         return;
     }
-
+    
     obdh_request request;
     HAL_StatusTypeDef status=HAL_OK;
 

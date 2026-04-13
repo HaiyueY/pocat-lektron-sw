@@ -24,9 +24,24 @@
 BaseType_t tm_create_all_tasks(void);
 
 /**
- * @brief Request every managed subsystem task to pause.
+ * @brief Request every nominal-mode managed subsystem task to pause.
  */
-void tm_pause_all_tasks(void);
+void tm_pause_nominal_tasks(void);
+
+/**
+ * @brief Request every non-nominal-mode managed subsystem task to pause.
+ */
+void tm_pause_non_nominal_tasks(void);
+
+/**
+ * @brief Request every nominal-mode managed subsystem task to resume.
+ */
+void tm_resume_nominal_tasks(void);
+
+/**
+ * @brief Request every non-nominal-mode managed subsystem task to resume.
+ */
+void tm_resume_non_nominal_tasks(void);
 
 /**
  * @brief Reset the payload task by suspending, deleting, and recreating it.

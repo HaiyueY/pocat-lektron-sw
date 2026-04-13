@@ -23,7 +23,7 @@
 #include "events.h"
 #include <stdio.h>
 
-#define TM_PAUSE_ACK_TIMEOUT_MS 10000u
+#define TM_PAUSE_ACK_TIMEOUT_MS 10000u // definir
 
 /* ---- Module-level variables ---- */
 static TaskHandle_t payload_task_handle;
@@ -264,9 +264,9 @@ BaseType_t tm_create_all_tasks(void)
     return pdPASS;
 }
 
-void tm_pause_all_tasks(void)
+void tm_pause_nominal_tasks(void)
 {
-    xEventGroupClearBits(task_events_handle, EV_TASK_ACK_ALL_MASK);
+    xEventGroupClearBits(task_events_handle, EV_TASK_ACK_NOMINAL_MASK);
 
     xTaskNotify(payload_task_handle, N_TASK_PAUSE, eSetBits);
     xTaskNotify(eps_task_handle, N_TASK_PAUSE, eSetBits);
@@ -274,13 +274,14 @@ void tm_pause_all_tasks(void)
     xTaskNotify(adcs_task_handle, N_TASK_PAUSE, eSetBits);
     xTaskNotify(obdh_task_handle, N_TASK_PAUSE, eSetBits);
 
+    
     EventBits_t acks = xEventGroupWaitBits(task_events_handle,
-                                           EV_TASK_ACK_ALL_MASK,
+                                           EV_TASK_ACK_NOMINAL_MASK,
                                            pdTRUE,
                                            pdTRUE,
                                            pdMS_TO_TICKS(TM_PAUSE_ACK_TIMEOUT_MS));
 
-    EventBits_t missing_acks = EV_TASK_ACK_ALL_MASK & ~acks;
+    EventBits_t missing_acks = EV_TASK_ACK_NOMINAL_MASK & ~acks;
     if (missing_acks != 0)
     {
         printf("tm: PAUSE ACK timeout, missing: 0x%08lX\r\n",
@@ -288,36 +289,42 @@ void tm_pause_all_tasks(void)
     }
 }
 
-void tm_resume_payload_task(void)
+void tm_pause_non_nominal_tasks(void)
+{
+    xEventGroupClearBits(task_events_handle, EV_TASK_ACK_NON_NOMINAL_MASK);
+
+    xTaskNotify(eps_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(comms_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(adcs_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(obdh_task_handle, N_TASK_PAUSE, eSetBits);
+
+    EventBits_t acks = xEventGroupWaitBits(task_events_handle,
+                                           EV_TASK_ACK_NON_NOMINAL_MASK,
+                                           pdTRUE,
+                                           pdTRUE,
+                                           pdMS_TO_TICKS(TM_PAUSE_ACK_TIMEOUT_MS));
+
+    EventBits_t missing_acks = EV_TASK_ACK_NON_NOMINAL_MASK & ~acks;
+    if (missing_acks != 0)
+    {
+        printf("tm: PAUSE ACK timeout for non-nominal tasks, missing: 0x%08lX\r\n",
+            (unsigned long)missing_acks);
+    }
+}
+
+void tm_resume_nominal_tasks(void) 
 {
     xTaskNotify(payload_task_handle, N_TASK_RESUME, eSetBits);
-}
-
-void tm_resume_eps_task(void)
-{
     xTaskNotify(eps_task_handle, N_TASK_RESUME, eSetBits);
-}
-
-void tm_resume_comms_task(void)
-{
     xTaskNotify(comms_task_handle, N_TASK_RESUME, eSetBits);
-}
-
-void tm_resume_adcs_task(void)
-{
     xTaskNotify(adcs_task_handle, N_TASK_RESUME, eSetBits);
-}
-
-void tm_resume_obdh_task(void)
-{
     xTaskNotify(obdh_task_handle, N_TASK_RESUME, eSetBits);
 }
 
-void tm_resume_all_tasks(void)
+void tm_resume_non_nominal_tasks(void)
 {
-    tm_resume_payload_task();
-    tm_resume_eps_task();
-    tm_resume_comms_task();
-    tm_resume_adcs_task();
-    tm_resume_obdh_task();
+    xTaskNotify(eps_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(comms_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(adcs_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(obdh_task_handle, N_TASK_RESUME, eSetBits);
 }

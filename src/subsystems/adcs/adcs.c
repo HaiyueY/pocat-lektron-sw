@@ -47,7 +47,6 @@ void adcs_task(void *pv_parameters) {
         process_adcs();
         health_kick(HEALTH_BIT_ADCS);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        //printf("ADCS loop\r\n");
     }
 }
 
@@ -57,7 +56,6 @@ static void setup_adcs(void) {
     // Apply the default configuration
     paused = false;
     deferred_notifications = 0;
-    printf("Setting up ADCS...\r\n");
 }
 
 static void process_adcs(void) {

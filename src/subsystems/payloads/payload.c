@@ -17,6 +17,7 @@
 #include "health.h"
 #include "notifications.h"
 #include "events.h"
+#include "log.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -33,7 +34,6 @@ static uint32_t deferred_notifications;
 static void setup_payload(void);
 static void process_payload(void);
 static uint32_t wait_for_notification(void);
-static void capture_photo(void);
 
 /* ---- Public function definitions ---- */
 
@@ -45,7 +45,6 @@ void payload_task(void *pv_parameters) {
         process_payload();
         health_kick(HEALTH_BIT_PAYLOAD);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        //printf("PAYLOAD loop\r\n");
     }
     
 }
@@ -58,7 +57,6 @@ static void setup_payload(void) {
     // ...
     paused = false;
     deferred_notifications = 0;
-    printf("Setting up PAYLOAD...\r\n");
     
 }
 
@@ -82,7 +80,6 @@ static void process_payload(void) {
         xEventGroupSetBits(task_events_handle, EV_TASK_ACK_PAYLOAD);
         return;
     }
-
     // if (notificationValue & PAYLOAD_PHOTO_CAPTURE) {
     //     capture_photo();
     // }
@@ -98,17 +95,5 @@ static uint32_t wait_for_notification(void) {
                     &notificationValue,
                     pdMS_TO_TICKS(500) );  // timeout to allow periodic health kicks
     return notificationValue;
-
-}
-
-static void capture_photo(void) {
-
-    //     /* 1. Initialize camera with current settings */
-    // initCam(huart4, resolution, compressibility, info);
-
-    // /* 2. Grab a photo into ‘info’ buffer */
-    // getPhoto(huart4, info);
-
-    printf("Capturing photo...\n");
 
 }

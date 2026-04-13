@@ -12,6 +12,7 @@
 #include "task.h"
 #include "flash.h"
 #include "task_management.h"
+#include "clock.h"
 
 #include <stdio.h>
 
@@ -27,42 +28,41 @@ void state_machine_init(ObcState_t *currentState) {
 static void change_state(ObcState_t *currentState, ObcState_t newState)
 {
     OBDH_Write_Request(PREVIOUS_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t)); // Store the current state in flash
-    
-    tm_pause_all_tasks();
-    
+
+    if (*currentState == NOMINAL) {
+        tm_pause_nominal_tasks();
+    }
+    else {
+        tm_pause_non_nominal_tasks();
+    }
+
     vTaskSuspendAll(); // revisar
     clock_switch_for_state(newState);
     xTaskResumeAll(); // revisar
 
-    if (*currentState == CONTINGENCY && newState == NOMINAL) {
-        tm_resume_all_tasks();
+    if (newState == NOMINAL) {
+        tm_resume_nominal_tasks();
         // return COMMS to NOMINAL mode
         // return ADCS to NOMINAL mode
     }
     else {
-        tm_resume_eps_task();
-        tm_resume_comms_task();
-        tm_resume_adcs_task();
-        tm_resume_obdh_task();
-        if (*currentState == NOMINAL && newState == CONTINGENCY) {
+        // resume non nominal tasks
+        tm_resume_non_nominal_tasks();
+        if (newState == CONTINGENCY) {
             // COMMS beacon only
             // ADCS detumbling only
         }
-        else if (*currentState == CONTINGENCY && newState == SUNSAFE) {
-            // ADCS only idle
+        else if (newState == SUNSAFE) {
+            // COMMS beacon only
+            // ADCS idle
         }
-        else if (*currentState == SUNSAFE && newState == SURVIVAL) {
+        else if (newState == SURVIVAL) {
             // COMMS RX only
-        }
-        else if (*currentState == SURVIVAL && newState == SUNSAFE) {
-            // COMMS beacon only
-        }
-        else if (*currentState == SUNSAFE && newState == CONTINGENCY) {
-            // ADCS detumbling only
+            // ADCS idle
         }
     }
-    
-    *currentState = newState;  
+
+    *currentState = newState;
     OBDH_Write_Request(CURRENT_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t)); // Update the current state in flash
     state_operations_at_beginning(currentState);
 }
@@ -73,9 +73,9 @@ static void state_operations_at_beginning(ObcState_t *currentState) {
 
         case NOMINAL:
             // TODO
-            
+
             break;
-        
+
         case CONTINGENCY:
             // TODO
             break;
