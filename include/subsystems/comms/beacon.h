@@ -1,17 +1,16 @@
 /**
  * @file beacon.h
- * @brief Periodic beacon transmission using a FreeRTOS software timer.
+ * @brief Periodic beacon transmission task.
  */
 
 #pragma once
 
-#define BEACON_PERIOD_MS  5000  /**< Beacon interval: 1 minute */
+#define BEACON_PERIOD_MS  5000  /**< Beacon interval in ms */
 
 /**
- * @brief Create and start the beacon software timer.
+ * @brief Beacon task: enqueues a beacon packet every BEACON_PERIOD_MS.
  *
- * Must be called after the scheduler is running (i.e. from within a task).
+ * Gets the TX queue handle from comms and notifies transceiver_task.
+ * Must be created after the scheduler is running.
  */
-void beacon_init(void);
-
-void send_beacon(void);
+void beacon_task(void *pv_parameters);

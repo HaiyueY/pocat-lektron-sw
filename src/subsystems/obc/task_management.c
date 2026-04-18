@@ -18,6 +18,7 @@
 #include "payload.h"
 #include "adcs.h"
 #include "transceiver.h"
+#include "beacon.h"
 #include "health.h"
 #include "flash.h"
 #include <stdio.h>
@@ -29,6 +30,7 @@ static TaskHandle_t comms_task_handle;
 static TaskHandle_t adcs_task_handle;
 static TaskHandle_t obdh_task_handle;
 static TaskHandle_t transceiver_task_handle;
+static TaskHandle_t beacon_task_handle;
 
 /* ---- Public getters ---- */
 
@@ -38,6 +40,7 @@ TaskHandle_t obc_get_obdh_handle(void)        { return obdh_task_handle; }
 TaskHandle_t obc_get_adcs_handle(void)        { return adcs_task_handle; }
 TaskHandle_t obc_get_payload_handle(void)     { return payload_task_handle; }
 TaskHandle_t obc_get_transceiver_handle(void) { return transceiver_task_handle; }
+TaskHandle_t obc_get_beacon_handle(void)      { return beacon_task_handle; }
 
 /* ---- Private function definitions ---- */
 
@@ -101,6 +104,11 @@ static BaseType_t create_transceiver_task(void)
         health_set_expected(health_get_expected() | HEALTH_BIT_COMMS);
     }
     return ok;
+}
+
+static BaseType_t create_beacon_task(void)
+{
+    return xTaskCreate(beacon_task, "BEACON", BEACON_STACK_SIZE, NULL, BEACON_PRIORITY, &beacon_task_handle);
 }
 
 /* ---- Public function definitions ---- */
@@ -271,6 +279,13 @@ BaseType_t tm_create_all_tasks(void)
     if (ok != pdPASS)
     {
         printf("Error creating transceiver task\r\n");
+        return ok;
+    }
+
+    ok = create_beacon_task();
+    if (ok != pdPASS)
+    {
+        printf("Error creating beacon task\r\n");
         return ok;
     }
 

@@ -26,8 +26,7 @@
 #define ADCS_STACK_SIZE      1024
 #define OBDH_STACK_SIZE      1024
 #define TRANSCEIVER_STACK_SIZE 1024
-
-
+#define BEACON_STACK_SIZE    512
 
 // Task priorities
 #define OBC_PRIORITY         2
@@ -37,6 +36,7 @@
 #define ADCS_PRIORITY        1
 #define OBDH_PRIORITY        1
 #define TRANSCEIVER_PRIORITY 1
+#define BEACON_PRIORITY      1
 
 /**
  * @brief OBC task entry point — runs the OBC state machine.
@@ -52,6 +52,7 @@ TaskHandle_t obc_get_eps_handle(void);
 TaskHandle_t obc_get_obdh_handle(void);
 TaskHandle_t obc_get_payload_handle(void);
 TaskHandle_t obc_get_transceiver_handle(void);
+TaskHandle_t obc_get_beacon_handle(void);
 /** @} */
 
 #endif /* INC_OBC_H_ */

@@ -17,10 +17,14 @@
 
 /* ---- Constants ---- */
 
-#define COMMS_PKT_SIZE 48
-#define ARQ_WINDOW_SIZE 1
-#define ARQ_MAX_RETRIES 3
-#define ACK_TIMEOUT_MS  4000
+#define COMMS_PKT_SIZE    48
+#define ARQ_MAX_RETRIES   3
+#define ACK_TIMEOUT_MS    4000
+
+/* Protocol identifiers (link-layer) */
+#define COMMS_MISSION_ID  0xC8
+#define COMMS_PQ_ID       0x9D
+#define COMMS_ACK_TYPE    2
 
 /* ---- Type definitions ---- */
 
@@ -42,19 +46,8 @@ typedef struct {
     uint8_t length;
     uint8_t tries;
     uint8_t seq_num;
-    uint8_t is_ack;
+    uint8_t needs_ack;
 } TxQueueEntry_t;
-
-/**
- * @brief Pending ACK window entry for ARQ.
- */
-typedef struct {
-    TxQueueEntry_t entry;
-    uint8_t        seq_num;
-    TickType_t     sent_at;
-    uint8_t        retries;
-    uint8_t        in_use;
-} PendingAckEntry_t;
 
 typedef enum {
     RX_MODE_DIRECT     = 0,

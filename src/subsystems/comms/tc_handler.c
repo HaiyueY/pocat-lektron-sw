@@ -33,45 +33,43 @@ static inline void notify(TaskHandle_t handle, uint32_t bits)
 
 /* ---- Public functions ---- */
 
-int tc_process(const uint8_t *rx_data)
+void tc_process(const uint8_t *rx_data)
 {
     tc_id_t tc_id = (tc_id_t)rx_data[2];
-    int ack = 0;
 
     switch (tc_id) {
 
     /* ── S/C Ping ───────────────────────────────────────────────────────── */
 
     case TC_PING:
-        ack = 1;
         break;
 
     /* ── Mode Transits ──────────────────────────────────────────────────── */
 
     case TC_TRANSIT_TO_NM:
-        ack = 1;
+
         notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_NOMINAL);
         break;
 
     case TC_TRANSIT_TO_CM:
-        ack = 1;
+
         notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_CONTINGENCY);
         break;
 
     case TC_TRANSIT_TO_SSM:
-        ack = 1;
+
         notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_SUNSAFE);
         break;
 
     case TC_TRANSIT_TO_SM:
-        ack = 1;
+
         notify(main_get_obc_handle(), N_OBC_EXIT_STATE_TO_SURVIVAL);
         break;
 
     /* ── SS Configuration ───────────────────────────────────────────────── */
 
     case TC_UPLOAD_ADCS_CAL:
-        ack = 1;
+
         /* Reference processing (multi-packet upload):
          * if (ADCS_counter == 1 && tlc_data[2]==86) {
          *     Send_to_WFQueue(&tlc_data[3], CALIBRATION_PACKET_SIZE,
@@ -97,7 +95,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_UPLOAD_ADCS_TLE:
-        ack = 1;
+
         /* Reference processing (multi-packet upload):
          * if ((TLE_counter==1 && tlc_data[2]==86) ||
          *     (TLE_counter==2 && tlc_data[2]==164)) {
@@ -119,7 +117,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_UPLOAD_COMMS_CONFIG:
-        ack = 1;
+
         /* Reference processing:
          * Radio.Standby();
          * SX1262TLCConfig(RxData);  // reconfigures SF, CR, RF_F
@@ -131,7 +129,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_UPLOAD_COMMS_PARAMS:
-        ack = 1;
+
         /* Reference processing:
          * Radio.Standby();
          * COMMSTLCConfig(RxData);  // updates rxTime, sleepTime, CAD mode, window
@@ -143,20 +141,20 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_UPLOAD_UNIX_TIME:
-        ack = 1;
+
         time_set_unix((rx_data[3] << 24) | (rx_data[4] << 16) | (rx_data[5] << 8) | rx_data[6]);
         // OBC task is notified that the time has been updated, in case it needs to trigger time-dependent actions
         notify(main_get_obc_handle(), N_OBC_UPDATE_TIME);  
         break;
 
     case TC_UPLOAD_EPS_TH:
-        ack = 1;
+
         OBDH_Write_Request(EPS_THRESHOLDS_ADDR, &rx_data[3], 3); // write all 3 thresholds at once
         notify(obc_get_eps_handle(), N_EPS_NEW_THRESHOLDS);
         break;
 
     case TC_UPLOAD_PL_CONFIG:
-        ack = 1;
+
         /* Reference processing:
          * Send_to_WFQueue((uint8_t*) tlc_data[3], 8,
          *                 RFI_CONFIG_ADDR, COMMSsender);
@@ -165,7 +163,6 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_DOWNLINK_CONFIG:
-        ack = 0;
         /* Reference processing:
          * plsize = 19;
          * GoTX_Flag = 1;
@@ -177,12 +174,12 @@ int tc_process(const uint8_t *rx_data)
     /* ── EPS Heater ─────────────────────────────────────────────────────── */
 
     case TC_EPS_HEATER_ENABLE:
-        ack = 1;
+
         notify(obc_get_eps_handle(), N_EPS_ENABLE_AUTO_HEAT);
         break;
 
     case TC_EPS_HEATER_DISABLE:
-        ack = 1;
+
         notify(obc_get_eps_handle(), N_EPS_DISABLE_AUTO_HEAT);
         break;
 
@@ -223,24 +220,24 @@ int tc_process(const uint8_t *rx_data)
     /* ── Flash Memory ───────────────────────────────────────────────────── */
 
     case TC_CLEAR_PL_DATA:
-        ack = 1;
+
         notify(obc_get_obdh_handle(), N_OBDH_CLEAR_PAYLOAD);
         break;
 
     case TC_CLEAR_FLASH:
-        ack = 1;
+
         notify(obc_get_obdh_handle(), N_OBDH_CLEAR_FLASH);
         break;
 
     case TC_CLEAR_HT:
-        ack = 1;
+
         notify(obc_get_obdh_handle(), N_OBDH_CLEAR_HT);
         break;
 
     /* ── COMMS ──────────────────────────────────────────────────────────── */
 
     case TC_COMMS_STOP_TX:
-        ack = 1;
+
         /* Reference processing:
          * xTimerStop(xTimerBeacon, 0);
          * TXStopped_Flag = 1;
@@ -249,7 +246,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_COMMS_RESUME_TX:
-        ack = 1;
+
         /* Reference processing:
          * xTimerStart(xTimerBeacon, 0);
          * TXStopped_Flag = 0;
@@ -266,7 +263,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_COMMS_HT_DOWNLINK:
-        ack = 1;
+
         // TODO: enqueue historic telemetry from OBDH
         break;
 
@@ -289,7 +286,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_PAYLOAD_DEACTIVATE:
-        ack = 1;
+
         /* Reference processing:
          * Beacon_Flag = 1;
          * GoTX_Flag = 1;
@@ -298,7 +295,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_PAYLOAD_SEND_DATA:
-        ack = 1;
+
         /* Reference processing:
          * plsize = 40;
          * packetwindow = 5;
@@ -311,12 +308,12 @@ int tc_process(const uint8_t *rx_data)
     /* ── OBC ────────────────────────────────────────────────────────────── */
 
     case TC_OBC_HARD_REBOOT:
-        ack = 1;
+
         notify(main_get_obc_handle(), N_OBC_HARD_REBOOT);
         break;
 
     case TC_OBC_SOFT_REBOOT:
-        ack = 1;
+
         /* Reference processing:
          * HAL_NVIC_SystemReset();
          */
@@ -324,7 +321,7 @@ int tc_process(const uint8_t *rx_data)
         break;
 
     case TC_OBC_PERIPH_REBOOT:
-        ack = 1;
+
         notify(main_get_obc_handle(), N_OBC_PERIPHERALS_REBOOT);
         break;
 
@@ -339,5 +336,4 @@ int tc_process(const uint8_t *rx_data)
         break;
     }
 
-    return ack;
 }

@@ -1,20 +1,19 @@
 /**
  * @file transceiver.h
- * @brief Interrupt-driven RF transceiver task.
+ * @brief Interrupt-driven RF transceiver task with link-layer ACK and ARQ.
  *
- * Handles all RadioLib hardware operations (RX/TX) driven by DIO1 hardware interrupts.
- * Communicates with comms_task via FreeRTOS queues (rx_queue, tx_queue) and task notifications.
+ * Handles all RadioLib hardware operations (RX/TX) driven by DIO1 hardware
+ * interrupts, plus link-layer reliability:
+ *
+ * - On RX_DONE: reads packet, deinterleaves. If it is an ACK, consumes it
+ *   internally (ARQ matching). Otherwise, auto-sends a link-layer ACK and
+ *   forwards the data packet to comms_task via rx_queue.
+ * - On TX_READY: drains tx_queue, interleaves and transmits each packet.
+ *   For packets with needs_ack set, performs inline ARQ (send → wait for
+ *   ACK → retry on timeout, up to ARQ_MAX_RETRIES).
+ * - Always returns to RX mode when idle.
  */
 
 #pragma once
 
-/**
- * @brief Transceiver task function.
- *
- * Runs in an infinite loop:
- * - Waits on task notifications (RADIO_IRQ_BIT from DIO1, TX_READY_BIT from comms_task)
- * - On RX_DONE: reads packet, deinterleaves, pushes to rx_queue
- * - On TX_READY: drains tx_queue, transmits each packet, waits for TX_DONE
- * - Always returns to RX mode when idle
- */
 void transceiver_task(void *pv_parameters);
