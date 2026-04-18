@@ -25,8 +25,10 @@ typedef enum {
     HEALTH_BIT_PAYLOAD = (1u << 0),  /**< Payload subsystem */
     HEALTH_BIT_OBDH    = (1u << 1),  /**< On-Board Data Handling subsystem */
     HEALTH_BIT_EPS     = (1u << 2),  /**< Electrical Power System subsystem */
-    HEALTH_BIT_COMMS   = (1u << 3),  /**< Communications subsystem */
-    HEALTH_BIT_ADCS    = (1u << 4),  /**< Attitude Determination and Control subsystem */
+    HEALTH_BIT_COMMS        = (1u << 3),  /**< Communications subsystem */
+    HEALTH_BIT_ADCS         = (1u << 4),  /**< Attitude Determination and Control subsystem */
+    HEALTH_BIT_TRANSCEIVER  = (1u << 5),  /**< RF transceiver subsystem */
+    HEALTH_BIT_BEACON       = (1u << 6),  /**< Beacon subsystem */
 } health_bit_t;
 
 /**

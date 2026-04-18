@@ -82,6 +82,7 @@ void process_obdh(void) {
             paused = false;
             notifications = deferred_notifications;
             deferred_notifications = 0;
+            xEventGroupSetBits(task_events_handle, EV_TASK_ACK_OBDH);
         }
         else return;
     }

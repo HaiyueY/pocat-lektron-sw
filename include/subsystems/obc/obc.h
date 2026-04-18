@@ -51,6 +51,7 @@ void obc_task(void *pv_parameters);
 TaskHandle_t obc_get_comms_handle(void);
 TaskHandle_t obc_get_eps_handle(void);
 TaskHandle_t obc_get_obdh_handle(void);
+TaskHandle_t obc_get_adcs_handle(void);
 TaskHandle_t obc_get_payload_handle(void);
 TaskHandle_t obc_get_transceiver_handle(void);
 TaskHandle_t obc_get_beacon_handle(void);

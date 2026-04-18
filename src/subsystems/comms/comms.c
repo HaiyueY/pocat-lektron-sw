@@ -76,6 +76,7 @@ void comms_task(void *pv_parameters)
                 paused = false;
                 notif = deferred_notifications;
                 deferred_notifications = 0;
+                xEventGroupSetBits(task_events_handle, EV_TASK_ACK_COMMS);
             }
             else return;
         }

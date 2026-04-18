@@ -68,6 +68,7 @@ static void process_adcs(void) {
             paused = false;
             notificationValue = deferred_notifications;
             deferred_notifications = 0;
+            xEventGroupSetBits(task_events_handle, EV_TASK_ACK_ADCS);
         }
         else return; 
     }

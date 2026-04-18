@@ -74,6 +74,11 @@ void tm_reset_obdh_task(void);
  */
 void tm_reset_transceiver_task(void);
 
+/**
+ * @brief Reset the beacon task by suspending, deleting, and recreating it.
+ */
+void tm_reset_beacon_task(void);
+
 /** @} */
 
 /** @name Task handle getters
@@ -114,6 +119,12 @@ TaskHandle_t obc_get_payload_handle(void);
  * @return TaskHandle_t for transceiver task, or NULL if not created.
  */
 TaskHandle_t obc_get_transceiver_handle(void);
+
+/**
+ * @brief Get the beacon task handle.
+ * @return TaskHandle_t for beacon task, or NULL if not created.
+ */
+TaskHandle_t obc_get_beacon_handle(void);
 
 /** @} */
 

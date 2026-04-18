@@ -61,7 +61,7 @@ void obc_task(void *pv_parameters) {
        }
        vTaskDelay(pdMS_TO_TICKS(2000)); // Delay to prevent busy looping, adjust as needed  
        
-       printf("OBC loop\r\n");
+       //printf("OBC loop\r\n");
     }
 
 }
@@ -158,6 +158,14 @@ static void handle_health_faults(EventBits_t faults)
     if (faults & HEALTH_BIT_ADCS) {
         tm_reset_adcs_task();
         printf("ADCS task reset due to health check\r\n");
+    }
+    if (faults & HEALTH_BIT_TRANSCEIVER) {
+        tm_reset_transceiver_task();
+        printf("TRANSCEIVER task reset due to health check\r\n");
+    }
+    if (faults & HEALTH_BIT_BEACON) {
+        tm_reset_beacon_task();
+        printf("BEACON task reset due to health check\r\n");
     }
 }
 

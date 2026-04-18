@@ -121,14 +121,19 @@ static BaseType_t create_transceiver_task(void)
     BaseType_t ok = xTaskCreate(transceiver_task, "TRANSCEIVER", TRANSCEIVER_STACK_SIZE, NULL, TRANSCEIVER_PRIORITY, &transceiver_task_handle);
     if (ok == pdPASS)
     {
-        health_set_expected(health_get_expected() | HEALTH_BIT_COMMS);
+        health_set_expected(health_get_expected() | HEALTH_BIT_TRANSCEIVER);
     }
     return ok;
 }
 
 static BaseType_t create_beacon_task(void)
 {
-    return xTaskCreate(beacon_task, "BEACON", BEACON_STACK_SIZE, NULL, BEACON_PRIORITY, &beacon_task_handle);
+    BaseType_t ok = xTaskCreate(beacon_task, "BEACON", BEACON_STACK_SIZE, NULL, BEACON_PRIORITY, &beacon_task_handle);
+    if (ok == pdPASS)
+    {
+        health_set_expected(health_get_expected() | HEALTH_BIT_BEACON);
+    }
+    return ok;
 }
 
 /* ---- Public function definitions ---- */
@@ -257,6 +262,27 @@ void tm_reset_transceiver_task(void)
     }
 }
 
+void tm_reset_beacon_task(void)
+{
+    if (beacon_task_handle == NULL)
+        return;
+
+    taskENTER_CRITICAL();
+
+    vTaskSuspend(beacon_task_handle);
+    vTaskDelete(beacon_task_handle);
+    beacon_task_handle = NULL;
+
+    taskEXIT_CRITICAL();
+
+    BaseType_t ok = create_beacon_task();
+
+    if (ok != pdPASS)
+    {
+        printf("Error recreating beacon task\r\n");
+    }
+}
+
 BaseType_t tm_create_all_tasks(void)
 {
     BaseType_t ok = pdPASS;
@@ -329,6 +355,8 @@ void tm_pause_nominal_tasks(void)
     xTaskNotify(comms_task_handle, N_TASK_PAUSE, eSetBits);
     xTaskNotify(adcs_task_handle, N_TASK_PAUSE, eSetBits);
     xTaskNotify(obdh_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(transceiver_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(beacon_task_handle, N_TASK_PAUSE, eSetBits);
 
     
     EventBits_t acks = xEventGroupWaitBits(task_events_handle,
@@ -353,6 +381,8 @@ void tm_pause_non_nominal_tasks(void)
     xTaskNotify(comms_task_handle, N_TASK_PAUSE, eSetBits);
     xTaskNotify(adcs_task_handle, N_TASK_PAUSE, eSetBits);
     xTaskNotify(obdh_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(transceiver_task_handle, N_TASK_PAUSE, eSetBits);
+    xTaskNotify(beacon_task_handle, N_TASK_PAUSE, eSetBits);
 
     EventBits_t acks = xEventGroupWaitBits(task_events_handle,
                                            EV_TASK_ACK_NON_NOMINAL_MASK,
@@ -368,19 +398,53 @@ void tm_pause_non_nominal_tasks(void)
     }
 }
 
-void tm_resume_nominal_tasks(void) 
+void tm_resume_nominal_tasks(void)
 {
+    xEventGroupClearBits(task_events_handle, EV_TASK_ACK_NOMINAL_MASK);
+
     xTaskNotify(payload_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(eps_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(comms_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(adcs_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(obdh_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(transceiver_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(beacon_task_handle, N_TASK_RESUME, eSetBits);
+
+    EventBits_t acks = xEventGroupWaitBits(task_events_handle,
+                                           EV_TASK_ACK_NOMINAL_MASK,
+                                           pdTRUE,
+                                           pdTRUE,
+                                           pdMS_TO_TICKS(TM_PAUSE_ACK_TIMEOUT_MS));
+
+    EventBits_t missing_acks = EV_TASK_ACK_NOMINAL_MASK & ~acks;
+    if (missing_acks != 0)
+    {
+        printf("tm: RESUME ACK timeout, missing: 0x%08lX\r\n",
+            (unsigned long)missing_acks);
+    }
 }
 
 void tm_resume_non_nominal_tasks(void)
 {
+    xEventGroupClearBits(task_events_handle, EV_TASK_ACK_NON_NOMINAL_MASK);
+
     xTaskNotify(eps_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(comms_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(adcs_task_handle, N_TASK_RESUME, eSetBits);
     xTaskNotify(obdh_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(transceiver_task_handle, N_TASK_RESUME, eSetBits);
+    xTaskNotify(beacon_task_handle, N_TASK_RESUME, eSetBits);
+
+    EventBits_t acks = xEventGroupWaitBits(task_events_handle,
+                                           EV_TASK_ACK_NON_NOMINAL_MASK,
+                                           pdTRUE,
+                                           pdTRUE,
+                                           pdMS_TO_TICKS(TM_PAUSE_ACK_TIMEOUT_MS));
+
+    EventBits_t missing_acks = EV_TASK_ACK_NON_NOMINAL_MASK & ~acks;
+    if (missing_acks != 0)
+    {
+        printf("tm: RESUME ACK timeout for non-nominal tasks, missing: 0x%08lX\r\n",
+            (unsigned long)missing_acks);
+    }
 }
