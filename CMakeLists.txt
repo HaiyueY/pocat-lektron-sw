@@ -49,6 +49,7 @@ set(PROJECT_INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/obc
     ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/obdh
     ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/payloads
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/transceiver
 )
 
 set(FREERTOS_INCLUDE_DIRECTORIES

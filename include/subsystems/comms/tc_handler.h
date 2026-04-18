@@ -86,6 +86,5 @@ typedef enum {
  * always up-to-date even after a task reset.
  *
  * @param rx_data       Pointer to the deinterleaved 48-byte RX packet.
- * @return              1 if ACK should be transmitted, 0 otherwise.
  */
-int tc_process(const uint8_t *rx_data);
+void tc_process(const uint8_t *rx_data);

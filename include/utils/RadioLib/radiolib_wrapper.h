@@ -14,6 +14,20 @@
 #include <stdint.h>
 #include "TypeDef.h"
 
+/* SX126x IRQ flag constants (mirrored from SX126x_registers.h for C access) */
+#define RADIOLIB_SX126X_IRQ_TX_DONE             (0x0001)
+#define RADIOLIB_SX126X_IRQ_RX_DONE             (0x0002)
+#define RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED   (0x0004)
+#define RADIOLIB_SX126X_IRQ_SYNC_WORD_VALID     (0x0008)
+#define RADIOLIB_SX126X_IRQ_HEADER_VALID        (0x0010)
+#define RADIOLIB_SX126X_IRQ_HEADER_ERR          (0x0020)
+#define RADIOLIB_SX126X_IRQ_CRC_ERR             (0x0040)
+#define RADIOLIB_SX126X_IRQ_CAD_DONE            (0x0080)
+#define RADIOLIB_SX126X_IRQ_CAD_DETECTED        (0x0100)
+#define RADIOLIB_SX126X_IRQ_TIMEOUT             (0x0200)
+#define RADIOLIB_SX126X_IRQ_ALL                 (0x43FF)
+#define RADIOLIB_SX126X_IRQ_NONE                (0x0000)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -152,6 +166,55 @@ int16_t RadioLib_DutyCycleReceive(uint32_t listenMs, uint16_t preambleLen,
 /** @brief Process radio interrupts.
  * @note No-op function. RadioLib already handles it but it kept so that call sites need no changes. */
 void RadioLib_IrqProcess(void);
+
+/**
+ * @brief Register task to receive DIO1 interrupt notifications.
+ * @param handle Task handle for xTaskNotifyFromISR on DIO1 events.
+ * @note Must be called before StartReceive or StartTransmit.
+ */
+void RadioLib_SetIrqTask(void *handle);
+
+/**
+ * @brief Start async duty-cycle RX (non-blocking, returns immediately).
+ * @param preambleLen Preamble length in symbols; DIO1 fires on RX_DONE.
+ * @return 0 on success, negative RadioLib error code on failure.
+ */
+int16_t RadioLib_StartReceive(uint16_t preambleLen);
+
+/**
+ * @brief Start async TX (non-blocking, returns immediately).
+ * @param buf Pointer to packet data to transmit.
+ * @param len Length in bytes.
+ * @return 0 on success, negative RadioLib error code on failure.
+ * @note DIO1 fires on TX_DONE. Caller must wait for notification before StartTransmit again.
+ */
+int16_t RadioLib_StartTransmit(uint8_t *buf, uint16_t len);
+
+/**
+ * @brief Read the SX1262 IRQ status register.
+ * @return IRQ flags (RADIOLIB_SX126X_IRQ_*).
+ * @note Call this after DIO1 fires to determine what happened (RX_DONE, TX_DONE, etc).
+ */
+uint32_t RadioLib_GetIrqFlags(void);
+
+/**
+ * @brief Clear IRQ flags in the SX1262.
+ * @param mask IRQ flags to clear (e.g., RADIOLIB_SX126X_IRQ_ALL).
+ */
+void RadioLib_ClearIrqFlags(uint32_t mask);
+
+/**
+ * @brief Read received packet data after RX_DONE IRQ.
+ * @param outBuf     Buffer to write received data into.
+ * @param bufSize    Size of outBuf.
+ * @param outLen     [out] Actual number of bytes received (may be NULL).
+ * @param outRssi    [out] RSSI in dBm (may be NULL).
+ * @param outSnr     [out] SNR in dB (may be NULL).
+ * @return 0 on success, negative RadioLib error code on failure.
+ * @note Call this only after RX_DONE IRQ has fired.
+ */
+int16_t RadioLib_ReadRxData(uint8_t *outBuf, uint16_t bufSize,
+                            uint16_t *outLen, int16_t *outRssi, int8_t *outSnr);
 
 #ifdef __cplusplus
 }

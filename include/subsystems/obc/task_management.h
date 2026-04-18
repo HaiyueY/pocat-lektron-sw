@@ -69,6 +69,11 @@ void tm_reset_adcs_task(void);
  */
 void tm_reset_obdh_task(void);
 
+/**
+ * @brief Reset the transceiver task by suspending, deleting, and recreating it.
+ */
+void tm_reset_transceiver_task(void);
+
 /** @} */
 
 /** @name Task handle getters
@@ -104,6 +109,11 @@ TaskHandle_t obc_get_adcs_handle(void);
  */
 TaskHandle_t obc_get_payload_handle(void);
 
+/**
+ * @brief Get the transceiver task handle.
+ * @return TaskHandle_t for transceiver task, or NULL if not created.
+ */
+TaskHandle_t obc_get_transceiver_handle(void);
 
 /** @} */
 
