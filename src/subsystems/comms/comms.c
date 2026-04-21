@@ -78,14 +78,14 @@ void comms_task(void *pv_parameters)
                 deferred_notifications = 0;
                 xEventGroupSetBits(task_events_handle, EV_TASK_ACK_COMMS);
             }
-            else return;
+            else continue;
         }
 
         if (notif & N_TASK_PAUSE) {
             deferred_notifications |= notif & ~(N_TASK_PAUSE | N_TASK_RESUME);
             paused = true;
             xEventGroupSetBits(task_events_handle, EV_TASK_ACK_COMMS);
-            return;
+            continue;
         }
         if (notif & N_COMMS_NEW_CONFIG) {
             /* TODO: reload config from OBDH */
