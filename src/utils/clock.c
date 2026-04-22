@@ -3,81 +3,111 @@
  * @brief Dynamic system clock frequency switching for power management.
  *
  * Switches between 80 MHz (HSI+PLL), 8 MHz (MSI Range 7), and 2 MHz
- * (MSI Range 5) based on OBC state. Reconfigures TIM5, UART2, SPI2,
- * and ADC1 after each switch.
+ * (MSI Range 5) based on OBC state. After runtime switches, peripherals that
+ * derive timings from the system clock are reconfigured through periph.c.
  */
 
 #include "clock.h"
-#include "stm32l4xx_hal.h"
 #include "periph.h"
-#include "FreeRTOS.h"
-#include "task.h"
+#include "stm32l4xx_hal.h"
 #include <stdio.h>
 
 static ClockFreq_t current_freq = CLK_FREQ_80MHZ;
+static bool clock_initialized = false;
 
 static ClockFreq_t state_to_freq(ObcState_t state);
-static bool switch_to_80mhz(void);
+static bool switch_to_hsi(void);
 static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency);
-static void reconfigure_peripherals(ClockFreq_t freq);
+static bool systemclock_config_hsi(void);
+static bool systemclock_config_msi(uint32_t msi_range, uint32_t flash_latency);
 
+bool systemclock_config_for_state(ObcState_t state)
+{
+    ClockFreq_t target = state_to_freq(state);
+    bool ok;
+
+    if (clock_initialized && target == current_freq) {
+        return true;
+    }
+
+    if (target == CLK_FREQ_80MHZ) {
+        ok = systemclock_config_hsi();
+    } else {
+        uint32_t msi_range = (target == CLK_FREQ_8MHZ) ? RCC_MSIRANGE_7 : RCC_MSIRANGE_5;
+        uint32_t latency = (target == CLK_FREQ_8MHZ) ? FLASH_LATENCY_1 : FLASH_LATENCY_0;
+        ok = systemclock_config_msi(msi_range, latency);
+    }
+
+    if (!ok) {
+        printf("System clock config failed\r\n");
+        return false;
+    }
+
+    current_freq = target;
+    clock_initialized = true;
+    return true;
+}
 
 bool clock_switch_for_state(ObcState_t state)
 {
     ClockFreq_t target = state_to_freq(state);
-    if (target == current_freq) { return true; }
-
     bool ok;
-    
+
+    if (!clock_initialized) {
+        return false;
+    }
+
+    if (target == current_freq) {
+        return true;
+    }
+
     if (target == CLK_FREQ_80MHZ) {
-        ok = switch_to_80mhz();
+        ok = switch_to_hsi();
     } else {
-        uint32_t msi_range = (target == CLK_FREQ_8MHZ)
-            ? RCC_MSIRANGE_7   // 8 MHz 
-            : RCC_MSIRANGE_5;  // 2 MHz
-        uint32_t latency = (target == CLK_FREQ_8MHZ)
-            ? FLASH_LATENCY_1 // 8MHz at flash latency 1
-            : FLASH_LATENCY_0;  // 2 MHz
+        uint32_t msi_range = (target == CLK_FREQ_8MHZ) ? RCC_MSIRANGE_7 : RCC_MSIRANGE_5;
+        uint32_t latency = (target == CLK_FREQ_8MHZ) ? FLASH_LATENCY_1 : FLASH_LATENCY_0;
         ok = switch_to_msi(msi_range, latency);
     }
 
-    if (ok) {
-        reconfigure_peripherals(target);
-        current_freq = target;
-    }
-    else {
+    if (!ok) {
         printf("Clock switch failed\r\n");
+        return false;
     }
 
-    return ok;
+    periph_reconfigure_for_freq(target);
+    current_freq = target;
+    return true;
 }
 
+ClockFreq_t clock_get_current(void)
+{
+    return current_freq;
+}
 
 static ClockFreq_t state_to_freq(ObcState_t state)
 {
     switch (state) {
-        case SUNSAFE:   return CLK_FREQ_8MHZ;
-        case SURVIVAL:  return CLK_FREQ_2MHZ;
-        default:        return CLK_FREQ_80MHZ;  // NOMINAL, CONTINGENCY
+        case SUNSAFE:  return CLK_FREQ_8MHZ;
+        case SURVIVAL: return CLK_FREQ_2MHZ;
+        default:       return CLK_FREQ_80MHZ;
     }
 }
 
-
-static bool switch_to_80mhz(void)
+static bool switch_to_hsi(void)
 {
-    /* Step 1: Exit Low-Power Run mode if active (required before raising voltage/frequency) */
+    // Step 1: Exit Low-Power Run mode if active (required before raising voltage/frequency)
     if (__HAL_PWR_GET_FLAG(PWR_FLAG_REGLPF)) {
         if (HAL_PWREx_DisableLowPowerRunMode() != HAL_OK) {
             return false;
         }
     }
 
-    /* Step 2: Voltage scaling to Range 1 BEFORE increasing frequency */
+    // Step 2: Voltage scaling to Range 1 BEFORE increasing frequency
     if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK) {
         return false;
     }
 
-    /* Step 3: Enable HSI and PLL */
+    // Step 3: Enable HSI and PLL
     RCC_OscInitTypeDef osc = {0};
     osc.OscillatorType = RCC_OSCILLATORTYPE_HSI;
     osc.HSIState = RCC_HSI_ON;
@@ -93,7 +123,7 @@ static bool switch_to_80mhz(void)
         return false;
     }
 
-    /* Step 4: Switch SYSCLK to PLL */
+    // Step 4: Switch SYSCLK to PLL
     RCC_ClkInitTypeDef clk = {0};
     clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
                   | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
@@ -105,27 +135,26 @@ static bool switch_to_80mhz(void)
         return false;
     }
 
-    /* Step 5: Optionally disable MSI to save power */
+    // Step 5: Optionally disable MSI to save power
     RCC_OscInitTypeDef msi_off = {0};
     msi_off.OscillatorType = RCC_OSCILLATORTYPE_MSI;
     msi_off.MSIState = RCC_MSI_OFF;
     msi_off.PLL.PLLState = RCC_PLL_NONE;
-    HAL_RCC_OscConfig(&msi_off);  /* Non-critical if it fails */
+    HAL_RCC_OscConfig(&msi_off);
 
     return true;
 }
 
-
 static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
 {
-    /* Step 1: Exit Low-Power Run mode if active (e.g. switching from 2 MHz to 8 MHz) */
+    // Step 1: Exit Low-Power Run mode if active (e.g. switching from 2 MHz to 8 MHz)
     if (__HAL_PWR_GET_FLAG(PWR_FLAG_REGLPF)) {
         if (HAL_PWREx_DisableLowPowerRunMode() != HAL_OK) {
             return false;
         }
     }
 
-    /* Step 2: Enable MSI at target range */
+    // Step 2: Enable MSI at target range
     RCC_OscInitTypeDef osc = {0};
     osc.OscillatorType = RCC_OSCILLATORTYPE_MSI;
     osc.MSIState = RCC_MSI_ON;
@@ -136,7 +165,7 @@ static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
         return false;
     }
 
-    /* Step 3: Switch SYSCLK to MSI */
+    // Step 3: Switch SYSCLK to MSI
     RCC_ClkInitTypeDef clk = {0};
     clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
                   | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
@@ -153,9 +182,9 @@ static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
     pll_off.OscillatorType = RCC_OSCILLATORTYPE_HSI;
     pll_off.HSIState = RCC_HSI_OFF; // HSI clock deactivation
     pll_off.PLL.PLLState = RCC_PLL_OFF; // PLL deactivation
-    HAL_RCC_OscConfig(&pll_off);  /* Non-critical if it fails */
+    HAL_RCC_OscConfig(&pll_off);
 
-    /* Step 5: Voltage scaling to Range 2 AFTER decreasing frequency */
+    // Step 5: Voltage scaling to Range 2 AFTER decreasing frequency
     if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2) != HAL_OK) {
         return false;
     }
@@ -169,45 +198,85 @@ static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
     return true;
 }
 
-// todo: error handling 
-static void reconfigure_peripherals(ClockFreq_t freq)
+// only called after restarting satellite
+static bool systemclock_config_hsi(void)
 {
-    //TIM5
-    uint32_t tim5_psc;
-    switch (freq) {
-        case CLK_FREQ_80MHZ: tim5_psc = 79; break;  // 80 MHz / (79 + 1) = 1 MHz
-        case CLK_FREQ_8MHZ:  tim5_psc = 7;  break;  // 8 MHz / (7 + 1) = 1 MHz
-        case CLK_FREQ_2MHZ:  tim5_psc = 1;  break;  // 2 MHz / (1 + 1) = 1 MHz
-        default:             tim5_psc = 79;  break;
-    }
-    __HAL_TIM_SET_PRESCALER(&htim5, tim5_psc);
-    HAL_TIM_GenerateEvent(&htim5, TIM_EVENTSOURCE_UPDATE); // Apply new prescaler immediately by generating an update event
+    RCC_OscInitTypeDef osc = {0};
+    RCC_ClkInitTypeDef clk = {0};
 
-    // UART2: re-init recalculates BRR from current PCLK1
-    HAL_UART_Init(&huart2);
-
-    // SPI2
-    uint32_t spi_psc;
-    switch (freq) {
-        case CLK_FREQ_80MHZ: spi_psc = SPI_BAUDRATEPRESCALER_8;  break;  /* 10 MHz */
-        case CLK_FREQ_8MHZ:  spi_psc = SPI_BAUDRATEPRESCALER_2;  break;  /* 4 MHz  */
-        case CLK_FREQ_2MHZ:  spi_psc = SPI_BAUDRATEPRESCALER_2;  break;  /* 1 MHz  */
-        default:             spi_psc = SPI_BAUDRATEPRESCALER_8;  break;
+    // Configure the main internal regulator output voltage
+    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK) {
+        return false;
     }
-    HAL_SPI_DeInit(&hspi2);
-    hspi2.Init.BaudRatePrescaler = spi_psc;
-    HAL_SPI_Init(&hspi2);
 
-    // ADC1
-    uint32_t adc_psc;
-    switch (freq) {
-        case CLK_FREQ_80MHZ: adc_psc = ADC_CLOCK_SYNC_PCLK_DIV4; break;  /* 20 MHz */
-        case CLK_FREQ_8MHZ:  adc_psc = ADC_CLOCK_SYNC_PCLK_DIV1; break;  /* 8 MHz  */
-        case CLK_FREQ_2MHZ:  adc_psc = ADC_CLOCK_SYNC_PCLK_DIV1; break;  /* 2 MHz  */
-        default:             adc_psc = ADC_CLOCK_SYNC_PCLK_DIV4; break;
+    osc.OscillatorType = RCC_OSCILLATORTYPE_HSI | RCC_OSCILLATORTYPE_LSI;
+    osc.HSIState = RCC_HSI_ON;
+    osc.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+    osc.LSIState = RCC_LSI_ON;
+    osc.PLL.PLLState = RCC_PLL_ON;
+    osc.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+    osc.PLL.PLLM = 1;
+    osc.PLL.PLLN = 10;
+    osc.PLL.PLLP = RCC_PLLP_DIV7;
+    osc.PLL.PLLQ = RCC_PLLQ_DIV2;
+    osc.PLL.PLLR = RCC_PLLR_DIV2;
+    if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
+        return false;
     }
-    HAL_ADC_DeInit(&hadc1);
-    hadc1.Init.ClockPrescaler = adc_psc;
-    HAL_ADC_Init(&hadc1);
-    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+
+    // Initializes the CPU, AHB and APB buses clocks 
+    clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+                  | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    clk.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    clk.APB1CLKDivider = RCC_HCLK_DIV1;
+    clk.APB2CLKDivider = RCC_HCLK_DIV1;
+    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_4) != HAL_OK) {
+        return false;
+    }
+
+    return true;
+}
+
+// only called after restarting satellite
+static bool systemclock_config_msi(uint32_t msi_range, uint32_t flash_latency)
+{
+    RCC_OscInitTypeDef osc = {0};
+    RCC_ClkInitTypeDef clk = {0};
+
+    // Configure the main internal regulator output voltage
+    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2) != HAL_OK) {
+        return false;
+    }
+
+    /** Initializes the RCC Oscillators according to the specified parameters
+    * in the RCC_OscInitTypeDef structure.
+    */
+    osc.OscillatorType = RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_MSI;
+    osc.LSIState = RCC_LSI_ON;
+    osc.MSIState = RCC_MSI_ON;
+    osc.MSICalibrationValue = 0;
+    osc.MSIClockRange = msi_range;
+    osc.PLL.PLLState = RCC_PLL_NONE;
+    if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
+        return false;
+    }
+
+    // Initializes the CPU, AHB and APB buses clocks
+    clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+                  | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    clk.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+    clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    clk.APB1CLKDivider = RCC_HCLK_DIV1;
+    clk.APB2CLKDivider = RCC_HCLK_DIV1;
+    if (HAL_RCC_ClockConfig(&clk, flash_latency) != HAL_OK) {
+        return false;
+    }
+
+    // enter low-power run mode
+    if (msi_range == RCC_MSIRANGE_5) {
+        HAL_PWREx_EnableLowPowerRunMode();
+    }
+
+    return true;
 }
