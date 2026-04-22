@@ -16,12 +16,13 @@ static ClockFreq_t current_freq = CLK_FREQ_80MHZ;
 static bool clock_initialized = false;
 
 static ClockFreq_t state_to_freq(ObcState_t state);
+static bool systemclock_config_for_freq(ClockFreq_t target);
 static bool switch_to_hsi(void);
 static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency);
 static bool systemclock_config_hsi(void);
 static bool systemclock_config_msi(uint32_t msi_range, uint32_t flash_latency);
 
-bool systemclock_config_for_state(ObcState_t state)
+bool systemclock_init_for_state(ObcState_t state)
 {
     ClockFreq_t target = state_to_freq(state);
     bool ok;
@@ -30,13 +31,7 @@ bool systemclock_config_for_state(ObcState_t state)
         return true;
     }
 
-    if (target == CLK_FREQ_80MHZ) {
-        ok = systemclock_config_hsi();
-    } else {
-        uint32_t msi_range = (target == CLK_FREQ_8MHZ) ? RCC_MSIRANGE_7 : RCC_MSIRANGE_5;
-        uint32_t latency = (target == CLK_FREQ_8MHZ) ? FLASH_LATENCY_1 : FLASH_LATENCY_0;
-        ok = systemclock_config_msi(msi_range, latency);
-    }
+    ok = systemclock_config_for_freq(target);
 
     if (!ok) {
         printf("System clock config failed\r\n");
@@ -91,6 +86,17 @@ static ClockFreq_t state_to_freq(ObcState_t state)
         case SURVIVAL: return CLK_FREQ_2MHZ;
         default:       return CLK_FREQ_80MHZ;
     }
+}
+
+static bool systemclock_config_for_freq(ClockFreq_t target)
+{
+    if (target == CLK_FREQ_80MHZ) {
+        return systemclock_config_hsi();
+    }
+
+    uint32_t msi_range = (target == CLK_FREQ_8MHZ) ? RCC_MSIRANGE_7 : RCC_MSIRANGE_5;
+    uint32_t latency = (target == CLK_FREQ_8MHZ) ? FLASH_LATENCY_1 : FLASH_LATENCY_0;
+    return systemclock_config_msi(msi_range, latency);
 }
 
 static bool switch_to_hsi(void)

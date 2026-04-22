@@ -20,11 +20,11 @@ typedef enum {
 } ClockFreq_t;
 
 /**
- * @brief Configure the system clock for the given OBC state during startup.
+ * @brief Initialize the system clock for the given OBC state during startup.
  * @param state Current OBC operational state.
  * @return true on success, false if a HAL call failed.
  */
-bool systemclock_config_for_state(ObcState_t state);
+bool systemclock_init_for_state(ObcState_t state);
 
 /**
  * @brief Switch system clock frequency for the given OBC state.

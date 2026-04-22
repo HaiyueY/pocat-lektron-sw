@@ -1,5 +1,6 @@
 #ifndef RADIO_MOCK
 #include "radiolib_wrapper.h"
+#include "modules/SX126x/SX126x_registers.h"
 
 /* C++ headers */
 #include <RadioLib.h>

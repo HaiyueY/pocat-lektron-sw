@@ -40,8 +40,6 @@
 static QueueHandle_t rx_queue = NULL;
 static QueueHandle_t tx_queue = NULL;
 
-// COMMS State Machine starts in startup state
-static CommsState_t CommsState = SLEEP;
 static bool paused;
 static uint32_t deferred_notifications;
 

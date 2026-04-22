@@ -65,7 +65,7 @@ void stm32RadioLibHal::pinMode(uint32_t pin, uint32_t mode) {
 
     enablePortClock(port);
 
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitTypeDef GPIO_InitStruct{};
     GPIO_InitStruct.Pin   = pinMask;
     GPIO_InitStruct.Pull  = GPIO_NOPULL; 
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -117,7 +117,7 @@ void stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb
 
     __HAL_RCC_SYSCFG_CLK_ENABLE(); 
 
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitTypeDef GPIO_InitStruct{};
     GPIO_InitStruct.Pin   = pinMask;
     GPIO_InitStruct.Pull  = GPIO_NOPULL;          
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -156,7 +156,6 @@ void stm32RadioLibHal::detachInterrupt(uint32_t interruptNum) {
         return;
     }
 
-    GPIO_TypeDef* port = getPort(interruptNum);
     uint16_t pinMask   = getPinMask(interruptNum);
     int line = getExtiLineFromPinMask(pinMask);
     if (line < 0 || line > 15) {
@@ -357,7 +356,7 @@ void stm32RadioLibHal::tone(uint32_t pin, unsigned int frequency, RadioLibTime_t
 
     enablePortClock(port);
 
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitTypeDef GPIO_InitStruct{};
     GPIO_InitStruct.Pin = pinMask;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -405,7 +404,7 @@ void stm32RadioLibHal::noTone(uint32_t pin) {
     uint16_t pinMask = getPinMask(pin);
 
     // reseteamos pin como un ouput normal (para que device no lea floating values) 
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitTypeDef GPIO_InitStruct{};
     GPIO_InitStruct.Pin = pinMask;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;

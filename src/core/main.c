@@ -47,12 +47,11 @@ int main(void)
   ObcState_t bootState;
   Read_Flash(CURRENT_STATE_ADDR, (uint8_t*)&bootState, sizeof(ObcState_t));
 
-  if (!systemclock_config_for_state(bootState)) {
+  if (!systemclock_init_for_state(bootState)) {
       Error_Handler();
   }
 
-  periph_init_for_freq(clock_get_current());
-
+  periph_init();
   log_init();
   time_init();
 

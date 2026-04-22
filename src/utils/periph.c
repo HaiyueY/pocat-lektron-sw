@@ -317,8 +317,10 @@ static void periph_adc1_init(ClockFreq_t freq)
 
 /* ---- Public API ---- */
 
-void periph_init_for_freq(ClockFreq_t freq)
+void periph_init(void)
 {
+    ClockFreq_t freq = clock_get_current();
+
     periph_gpio_init();
     periph_tim5_init(freq);
     periph_tim2_init();
