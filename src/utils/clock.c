@@ -3,64 +3,59 @@
  * @brief Dynamic system clock frequency switching for power management.
  *
  * Switches between 80 MHz (HSI+PLL), 8 MHz (MSI Range 7), and 2 MHz
- * (MSI Range 5) based on OBC state. After runtime switches, peripherals that
- * derive timings from the system clock are reconfigured through periph.c.
+ * (MSI Range 5) based on the requested frequency.
  */
 
 #include "clock.h"
-#include "periph.h"
 #include "stm32l4xx_hal.h"
 #include <stdio.h>
 
 static ClockFreq_t current_freq = CLK_FREQ_80MHZ;
 static bool clock_initialized = false;
 
-static ClockFreq_t state_to_freq(ObcState_t state);
 static bool systemclock_config_for_freq(ClockFreq_t target);
 static bool switch_to_hsi(void);
 static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency);
 static bool systemclock_config_hsi(void);
 static bool systemclock_config_msi(uint32_t msi_range, uint32_t flash_latency);
 
-bool systemclock_init_for_state(ObcState_t state)
+bool systemclock_init_for_freq(ClockFreq_t freq)
 {
-    ClockFreq_t target = state_to_freq(state);
     bool ok;
 
-    if (clock_initialized && target == current_freq) {
+    if (clock_initialized && freq == current_freq) {
         return true;
     }
 
-    ok = systemclock_config_for_freq(target);
+    ok = systemclock_config_for_freq(freq);
 
     if (!ok) {
         printf("System clock config failed\r\n");
         return false;
     }
 
-    current_freq = target;
+    current_freq = freq;
     clock_initialized = true;
     return true;
 }
 
-bool clock_switch_for_state(ObcState_t state)
+bool clock_switch_to_freq(ClockFreq_t freq)
 {
-    ClockFreq_t target = state_to_freq(state);
     bool ok;
 
     if (!clock_initialized) {
         return false;
     }
 
-    if (target == current_freq) {
+    if (freq == current_freq) {
         return true;
     }
 
-    if (target == CLK_FREQ_80MHZ) {
+    if (freq == CLK_FREQ_80MHZ) {
         ok = switch_to_hsi();
     } else {
-        uint32_t msi_range = (target == CLK_FREQ_8MHZ) ? RCC_MSIRANGE_7 : RCC_MSIRANGE_5;
-        uint32_t latency = (target == CLK_FREQ_8MHZ) ? FLASH_LATENCY_1 : FLASH_LATENCY_0;
+        uint32_t msi_range = (freq == CLK_FREQ_8MHZ) ? RCC_MSIRANGE_7 : RCC_MSIRANGE_5;
+        uint32_t latency = (freq == CLK_FREQ_8MHZ) ? FLASH_LATENCY_1 : FLASH_LATENCY_0;
         ok = switch_to_msi(msi_range, latency);
     }
 
@@ -69,23 +64,13 @@ bool clock_switch_for_state(ObcState_t state)
         return false;
     }
 
-    periph_reconfigure_for_freq(target);
-    current_freq = target;
+    current_freq = freq;
     return true;
 }
 
 ClockFreq_t clock_get_current(void)
 {
     return current_freq;
-}
-
-static ClockFreq_t state_to_freq(ObcState_t state)
-{
-    switch (state) {
-        case SUNSAFE:  return CLK_FREQ_8MHZ;
-        case SURVIVAL: return CLK_FREQ_2MHZ;
-        default:       return CLK_FREQ_80MHZ;
-    }
 }
 
 static bool systemclock_config_for_freq(ClockFreq_t target)

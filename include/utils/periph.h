@@ -39,9 +39,10 @@ extern RTC_HandleTypeDef hrtc;
 extern ADC_HandleTypeDef hadc1;
 
 /**
- * @brief Initialize all board peripherals for the current system clock.
+ * @brief Initialize all board peripherals for a system clock frequency.
+ * @param freq System clock selection.
  */
-void periph_init(void);
+void periph_init_for_freq(ClockFreq_t freq);
 
 /**
  * @brief Reconfigure peripherals that depend on the system clock frequency.

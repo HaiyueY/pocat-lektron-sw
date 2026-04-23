@@ -12,7 +12,7 @@
 #include "task.h"
 #include "flash.h"
 #include "task_management.h"
-#include "clock.h"
+#include "clock_profile.h"
 
 #include <stdio.h>
 
@@ -37,7 +37,7 @@ static void change_state(ObcState_t *currentState, ObcState_t newState)
     }
 
     vTaskSuspendAll(); // revisar
-    clock_switch_for_state(newState);
+    clock_profile_transition_to_state(newState);
     xTaskResumeAll(); // revisar
 
     if (newState == NOMINAL) {

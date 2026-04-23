@@ -43,6 +43,59 @@ ADC_HandleTypeDef hadc1;
 
 /* ---- Private Helpers ---- */
 
+static uint32_t tim5_prescaler_for_freq(ClockFreq_t freq);
+static uint32_t spi2_prescaler_for_freq(ClockFreq_t freq);
+static uint32_t adc1_prescaler_for_freq(ClockFreq_t freq);
+static void periph_gpio_init(void);
+static void periph_tim2_init(void);
+static void periph_tim5_init(ClockFreq_t freq);
+static void periph_spi2_init(ClockFreq_t freq);
+static void periph_iwdg_init(void);
+static void periph_usart2_init(void);
+static void periph_rtc_init(void);
+static void periph_adc1_init(ClockFreq_t freq);
+
+/* ---- Public API ---- */
+void periph_init_for_freq(ClockFreq_t freq)
+{
+    periph_gpio_init();
+    periph_tim5_init(freq);
+    periph_tim2_init();
+    periph_spi2_init(freq);
+    periph_iwdg_init();
+    periph_usart2_init();
+    periph_rtc_init();
+    periph_adc1_init(freq);
+}
+
+void periph_reconfigure_for_freq(ClockFreq_t freq)
+{
+    __HAL_TIM_SET_PRESCALER(&htim5, tim5_prescaler_for_freq(freq));
+    HAL_TIM_GenerateEvent(&htim5, TIM_EVENTSOURCE_UPDATE);
+
+    if (HAL_UART_Init(&huart2) != HAL_OK) {
+        Error_Handler();
+    }
+
+    HAL_SPI_DeInit(&hspi2);
+    hspi2.Init.BaudRatePrescaler = spi2_prescaler_for_freq(freq);
+    if (HAL_SPI_Init(&hspi2) != HAL_OK) {
+        Error_Handler();
+    }
+
+    HAL_ADC_DeInit(&hadc1);
+    hadc1.Init.ClockPrescaler = adc1_prescaler_for_freq(freq);
+    if (HAL_ADC_Init(&hadc1) != HAL_OK) {
+        Error_Handler();
+    }
+
+    if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/* ---- Private Helpers ---- */
+
 static uint32_t tim5_prescaler_for_freq(ClockFreq_t freq)
 {
     switch (freq) {
@@ -306,48 +359,6 @@ static void periph_adc1_init(ClockFreq_t freq)
     hadc1.Init.DMAContinuousRequests = DISABLE;
     hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
     hadc1.Init.OversamplingMode = DISABLE;
-    if (HAL_ADC_Init(&hadc1) != HAL_OK) {
-        Error_Handler();
-    }
-
-    if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
-        Error_Handler();
-    }
-}
-
-/* ---- Public API ---- */
-
-void periph_init(void)
-{
-    ClockFreq_t freq = clock_get_current();
-
-    periph_gpio_init();
-    periph_tim5_init(freq);
-    periph_tim2_init();
-    periph_spi2_init(freq);
-    periph_iwdg_init();
-    periph_usart2_init();
-    periph_rtc_init();
-    periph_adc1_init(freq);
-}
-
-void periph_reconfigure_for_freq(ClockFreq_t freq)
-{
-    __HAL_TIM_SET_PRESCALER(&htim5, tim5_prescaler_for_freq(freq));
-    HAL_TIM_GenerateEvent(&htim5, TIM_EVENTSOURCE_UPDATE);
-
-    if (HAL_UART_Init(&huart2) != HAL_OK) {
-        Error_Handler();
-    }
-
-    HAL_SPI_DeInit(&hspi2);
-    hspi2.Init.BaudRatePrescaler = spi2_prescaler_for_freq(freq);
-    if (HAL_SPI_Init(&hspi2) != HAL_OK) {
-        Error_Handler();
-    }
-
-    HAL_ADC_DeInit(&hadc1);
-    hadc1.Init.ClockPrescaler = adc1_prescaler_for_freq(freq);
     if (HAL_ADC_Init(&hadc1) != HAL_OK) {
         Error_Handler();
     }

@@ -15,7 +15,7 @@
 #include "stm32l4xx_hal.h"
 #include <stdio.h>
 #include "obc.h"
-#include "clock.h"
+#include "clock_profile.h"
 #include "log.h"
 #include "time.h"
 #include "flash.h"
@@ -47,14 +47,12 @@ int main(void)
   ObcState_t bootState;
   Read_Flash(CURRENT_STATE_ADDR, (uint8_t*)&bootState, sizeof(ObcState_t));
 
-  if (!systemclock_init_for_state(bootState)) {
+  if (!clock_profile_startup_for_state(bootState)) {
       Error_Handler();
   }
 
-  periph_init();
   log_init();
   time_init();
-
   printf("\r\n=======================\r\n pocat flight software\r\n=======================\r\n\r\n");
   
   BaseType_t result = xTaskCreate(obc_task, "OBC", OBC_STACK_SIZE, NULL, OBC_PRIORITY, &obc_task_handle);

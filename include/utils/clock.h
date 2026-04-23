@@ -2,16 +2,13 @@
  * @file clock.h
  * @brief Dynamic system clock frequency switching for power management.
  *
- * Provides runtime clock frequency changes based on the OBC operational state.
- * NOMINAL/CONTINGENCY run at 80 MHz (HSI+PLL), SUNSAFE at 8 MHz (MSI),
- * and SURVIVAL at 2 MHz (MSI) to reduce power consumption.
+ * Initializes and switches the system clock based on a requested frequency.
  */
 
 #ifndef INC_CLOCK_H_
 #define INC_CLOCK_H_
 
 #include <stdbool.h>
-#include "state_machine.h"
 
 typedef enum {
     CLK_FREQ_80MHZ,
@@ -20,18 +17,18 @@ typedef enum {
 } ClockFreq_t;
 
 /**
- * @brief Initialize the system clock for the given OBC state during startup.
- * @param state Current OBC operational state.
+ * @brief Initialize the system clock for a given frequency during startup.
+ * @param freq Target system clock frequency.
  * @return true on success, false if a HAL call failed.
  */
-bool systemclock_init_for_state(ObcState_t state);
+bool systemclock_init_for_freq(ClockFreq_t freq);
 
 /**
- * @brief Switch system clock frequency for the given OBC state.
- * @param state Current OBC operational state.
+ * @brief Switch system clock to a given frequency at runtime.
+ * @param freq Target system clock frequency.
  * @return true on success, false if a HAL call failed.
  */
-bool clock_switch_for_state(ObcState_t state);
+bool clock_switch_to_freq(ClockFreq_t freq);
 
 /**
  * @brief Get the current clock frequency setting.
