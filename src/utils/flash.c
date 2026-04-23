@@ -56,7 +56,7 @@ static uint32_t Get_Bank(uint32_t Addr)
     }
 }
 
-void Write_Flash(uint32_t data_addr, uint8_t *data,uint16_t n_bytes) {
+void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes) {
 	static FLASH_EraseInitTypeDef EraseInitStruct={0};
 	uint32_t PAGEError;
 	static uint64_t  dataSave[2048];
@@ -229,14 +229,14 @@ void store_flash_memory(uint32_t memory_address, uint8_t *data, uint16_t data_le
 }
 
 
-HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, uint8_t *data, size_t len)
+HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size_t len)
 {
     obdh_request request;
     HAL_StatusTypeDef operation_status = HAL_ERROR; //Variable that indicates the feedback
     uint32_t received_events =0;
     request.op=FLASH_WRITE;
     request.addr=address;
-    request.buf=data;
+    request.buf.src=data;
     request.len=len;
     request.client=xTaskGetCurrentTaskHandle();
     request.res=&operation_status;
@@ -245,9 +245,9 @@ HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, uint8_t *data, size_t len
     {
         return HAL_BUSY; //Queue full
     }
-    
+
     //Block and return result. Timeout of 2 seconds
-    
+
     BaseType_t result_wait= xTaskNotifyWait(0,N_FLASH_OPERATION_COMPLETE,&received_events,pdMS_TO_TICKS(2000));
     if (result_wait == pdPASS)
     {
@@ -256,7 +256,7 @@ HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, uint8_t *data, size_t len
             return operation_status;
         }
     }
-    return HAL_TIMEOUT; //If after 2 seconds nothing is recieved, timeout. 
+    return HAL_TIMEOUT; //If after 2 seconds nothing is recieved, timeout.
 
     //HAL_BUSY
 }
@@ -268,7 +268,7 @@ HAL_StatusTypeDef OBDH_Read_Request(uint32_t address, uint8_t *data, size_t len)
     uint32_t received_events =0;
     request.op=FLASH_READ;
     request.addr=address;
-    request.buf=data;
+    request.buf.dst=data;
     request.len=len;
     request.client=xTaskGetCurrentTaskHandle();
     request.res=&operation_status;

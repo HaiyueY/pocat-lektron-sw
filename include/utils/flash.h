@@ -123,7 +123,7 @@ extern EventGroupHandle_t xEventGroup;
 extern QueueHandle_t FLASH_Queue;
 extern SemaphoreHandle_t xMutex;
 
-void Write_Flash(uint32_t data_addr, uint8_t *data,uint16_t n_bytes);
+void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes);
 void Read_Flash(uint32_t data_addr, uint8_t *RxBuf, uint16_t n_bytes);
 void Send_to_WFQueue(uint8_t* pointer, uint32_t arrayLength, uint32_t addr, DataSource_t DataSource);
 
@@ -139,7 +139,7 @@ void store_flash_memory(uint32_t memory_address, uint8_t *data, uint16_t data_le
  * @return HAL_StatusTypeDef Returns wether the operation has been sucesful or not (indicates which type of error
  * has happened)
  */
-HAL_StatusTypeDef OBDH_Write_Request(uint32_t address,uint8_t *data, size_t length);
+HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size_t length);
 /**
  * @brief This function allows any task to perform a reading on the flash
  * 

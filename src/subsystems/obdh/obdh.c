@@ -102,17 +102,17 @@ void process_obdh(void) {
     {
         if(request.op==FLASH_READ)
         {
-            if(request.buf!=NULL)
+            if(request.buf.dst!=NULL)
             {
-                Read_Flash(request.addr, request.buf, request.len);
+                Read_Flash(request.addr, request.buf.dst, request.len);
             }
             status=HAL_OK;
         }
         else if(request.op == FLASH_WRITE)
         {
-            if(request.buf != NULL)
+            if(request.buf.src != NULL)
             {
-                Write_Flash(request.addr, request.buf, request.len);
+                Write_Flash(request.addr, request.buf.src, request.len);
                 status=HAL_OK;
             }
             else

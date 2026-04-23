@@ -27,7 +27,10 @@ typedef struct {
     read_write op;       // Operació: llegir o escriure
     uint32_t addr;       // Adreça de la Flash
     size_t len;          // Longitud en bytes
-    uint8_t *buf;        // Punter al buffer de dades
+    union {
+        const uint8_t *src;  // FLASH_WRITE: dades a escriure (només lectura)
+        uint8_t       *dst;  // FLASH_READ:  buffer a omplir
+    } buf;
     TaskHandle_t client; // Tarea que demana l'operació (per notificar-la)
     HAL_StatusTypeDef *res; //Punter que retorna l'estatus de la escriptura/lectura
 } obdh_request;
