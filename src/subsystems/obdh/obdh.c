@@ -23,7 +23,7 @@
 #include "queue.h"
 #include "flash.h"
 #include "notifications.h"
-#include "events.h"
+#include "task_management.h"
 
 /* ---- Macros and constants ---- */
 // ..
@@ -34,7 +34,6 @@
 /* ---- Module-level variables ---- */
 // ..
 QueueHandle_t obdh_queue_handle;
-static bool paused;
 static uint32_t deferred_notifications;
 /* ---- Private function prototypes ---- */
 void setup_obdh(void);
@@ -45,7 +44,7 @@ static uint32_t wait_for_notification(void);
 /* ---- Public function definitions ---- */
 
 void obdh_task(void *pv_parameters) {
-
+    (void)pv_parameters;
     setup_obdh();
 
     for (;;) {
@@ -59,7 +58,6 @@ void obdh_task(void *pv_parameters) {
 /* ---- Private function definitions ---- */
 
 void setup_obdh(void) {
-    paused = false;
     deferred_notifications = 0;
     // Apply the default configuration
 
@@ -76,23 +74,11 @@ void process_obdh(void) {
     uint32_t notifications = 0;
     notifications = wait_for_notification();
 
-    if (paused) {
-        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
-        if (notifications & N_TASK_RESUME) {
-            paused = false;
-            notifications = deferred_notifications;
-            deferred_notifications = 0;
-            xEventGroupSetBits(task_events_handle, EV_TASK_ACK_OBDH);
-        }
-        else return;
-    }
-
-    if (notifications & N_TASK_PAUSE) {
-        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
-        paused = true;
-        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_OBDH);
+    if (tm_check_pause(notifications, &deferred_notifications))
         return;
-    }
+
+    notifications |= deferred_notifications;
+    deferred_notifications = 0;
     
     obdh_request request;
     HAL_StatusTypeDef status=HAL_OK;

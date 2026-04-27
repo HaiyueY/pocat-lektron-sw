@@ -44,17 +44,4 @@
  */
 void obc_task(void *pv_parameters);
 
-/** @name Subsystem task handle getters
- *  Used by the TC handler and other tasks to send notifications.
- *  Handles are valid once obc_task has finished setup_obc().
- * @{ */
-TaskHandle_t obc_get_comms_handle(void);
-TaskHandle_t obc_get_eps_handle(void);
-TaskHandle_t obc_get_obdh_handle(void);
-TaskHandle_t obc_get_adcs_handle(void);
-TaskHandle_t obc_get_payload_handle(void);
-TaskHandle_t obc_get_transceiver_handle(void);
-TaskHandle_t obc_get_beacon_handle(void);
-/** @} */
-
 #endif /* INC_OBC_H_ */

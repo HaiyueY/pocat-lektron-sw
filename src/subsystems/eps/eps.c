@@ -18,7 +18,7 @@
 #include "health.h"
 #include "flash.h"
 #include "notifications.h"
-#include "events.h"
+#include "task_management.h"
 
 // The main functionality of the EPS task is providing the OBC with battery readings on 
 // it's voltage, current generated, capacity, temperature and charging status. The task 
@@ -29,12 +29,11 @@ static void setup_eps(void);
 static void process_eps(void);
 static uint32_t wait_for_notification(void);
 
-static bool paused;
 static uint32_t deferred_notifications;
 
 void eps_task(void *pv_parameters)
 {
-
+    (void)pv_parameters;
     setup_eps();
     for (;;) {
         process_eps();
@@ -46,7 +45,6 @@ void eps_task(void *pv_parameters)
 
 static void setup_eps(void)
 {
-    paused = false;
     deferred_notifications = 0;
     // Apply the default configuration
 }
@@ -55,23 +53,11 @@ static void process_eps(void)
 {
     uint32_t notifications = wait_for_notification();
 
-    if (paused) {
-        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
-        if (notifications & N_TASK_RESUME) {
-            paused = false;
-            notifications = deferred_notifications;
-            deferred_notifications = 0;
-            xEventGroupSetBits(task_events_handle, EV_TASK_ACK_EPS);
-        }
-        else return;
-    }
-
-    if (notifications & N_TASK_PAUSE) {
-        deferred_notifications |= notifications & ~(N_TASK_PAUSE | N_TASK_RESUME);
-        paused = true;
-        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_EPS);
+    if (tm_check_pause(notifications, &deferred_notifications))
         return;
-    }
+
+    notifications |= deferred_notifications;
+    deferred_notifications = 0;
 
     if (notifications & N_EPS_NEW_THRESHOLDS) {
         uint8_t thresholds[3] = {0}; // TODO define default theshholds in case of read failure

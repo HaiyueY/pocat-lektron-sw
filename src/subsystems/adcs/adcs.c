@@ -19,7 +19,7 @@
 #include "adcs.h"
 #include "health.h"
 #include "notifications.h"
-#include "events.h"
+#include "task_management.h"
 
 /* ---- Macros and constants ---- */
 #define ADCS_DETUMBLING_MODE (1 << 0)
@@ -29,7 +29,6 @@
 // ..
 
 /* ---- Module-level variables ---- */
-static bool paused;
 static uint32_t deferred_notifications;
 
 /* ---- Private function prototypes ---- */
@@ -42,6 +41,7 @@ static void point_to_nadir(void);
 /* ---- Public function definitions ---- */
 
 void adcs_task(void *pv_parameters) {
+    (void)pv_parameters;
     setup_adcs();
     for (;;) {
         process_adcs();
@@ -54,7 +54,6 @@ void adcs_task(void *pv_parameters) {
 
 static void setup_adcs(void) {
     // Apply the default configuration
-    paused = false;
     deferred_notifications = 0;
 }
 
@@ -62,23 +61,11 @@ static void process_adcs(void) {
 
     uint32_t notificationValue = wait_for_notification();
 
-    if (paused) { 
-        deferred_notifications |= notificationValue & ~(N_TASK_PAUSE | N_TASK_RESUME);
-        if (notificationValue & N_TASK_RESUME) {
-            paused = false;
-            notificationValue = deferred_notifications;
-            deferred_notifications = 0;
-            xEventGroupSetBits(task_events_handle, EV_TASK_ACK_ADCS);
-        }
-        else return; 
-    }
-
-    if (notificationValue & N_TASK_PAUSE) {
-        deferred_notifications |= notificationValue & ~(N_TASK_PAUSE | N_TASK_RESUME);
-        paused = true;
-        xEventGroupSetBits(task_events_handle, EV_TASK_ACK_ADCS);
+    if (tm_check_pause(notificationValue, &deferred_notifications))
         return;
-    }
+
+    notificationValue |= deferred_notifications;
+    deferred_notifications = 0;
 
     if (notificationValue & ADCS_DETUMBLING_MODE) {
         detumble();
