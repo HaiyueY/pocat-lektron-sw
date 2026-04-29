@@ -243,6 +243,53 @@ static inline quat_t quat_from_matrix(mat3d_t m)
 }
 
 /**
+ * Build the LVLH (Local-Vertical Local-Horizontal) attitude quaternion
+ * from inertial position and velocity vectors.
+ *
+ * LVLH basis (orbit-referenced frame):
+ *   z_LVLH = -r̂                    (nadir, pointing toward Earth center)
+ *   y_LVLH = -(r × v) / |r × v|     (anti orbit-normal; opposite of angular momentum)
+ *   x_LVLH = y_LVLH × z_LVLH        (≈ velocity direction for circular orbit)
+ *
+ * The returned quaternion q_LVLH represents the rotation ECI → LVLH-body, i.e.
+ *   quat_rotate_vec(q_LVLH, v_eci) = v_lvlh
+ * which is the same convention used by the TRIAD output q_eci_body. When the
+ * spacecraft body axes are perfectly aligned with the LVLH frame (body_x along
+ * velocity, body_z toward nadir), q_eci_body == q_LVLH and the attitude error
+ * quaternion (q_LVLH ⊗ conj(q_eci_body)) reduces to identity.
+ *
+ * Returns identity if r or v are degenerate (parallel or zero-magnitude).
+ */
+static inline quat_t quat_from_lvlh(vec3d_t r_eci, vec3d_t v_eci)
+{
+    double r_norm = vec3d_norm(r_eci);
+    if (r_norm < 1.0e-6) {
+        return quat_identity();
+    }
+
+    vec3d_t z_lvlh = vec3d_scale(r_eci, -1.0 / r_norm);
+
+    vec3d_t h = vec3d_cross(r_eci, v_eci);
+    double h_norm = vec3d_norm(h);
+    if (h_norm < 1.0e-6) {
+        return quat_identity();
+    }
+    vec3d_t y_lvlh = vec3d_scale(h, -1.0 / h_norm);
+
+    vec3d_t x_lvlh = vec3d_cross(y_lvlh, z_lvlh);
+    /* Re-normalize to absorb any numerical drift */
+    x_lvlh = vec3d_normalize(x_lvlh);
+
+    /* R_eci_to_lvlh has rows = LVLH basis vectors expressed in ECI */
+    mat3d_t R;
+    R.m[0][0] = x_lvlh.x; R.m[0][1] = x_lvlh.y; R.m[0][2] = x_lvlh.z;
+    R.m[1][0] = y_lvlh.x; R.m[1][1] = y_lvlh.y; R.m[1][2] = y_lvlh.z;
+    R.m[2][0] = z_lvlh.x; R.m[2][1] = z_lvlh.y; R.m[2][2] = z_lvlh.z;
+
+    return quat_from_matrix(R);
+}
+
+/**
  * Propagate quaternion forward using gyro angular velocity.
  *
  * The simulation uses kinematic equation (left multiplication):
