@@ -30,11 +30,17 @@ static const double max_dipole[3] = {
 
 /**
  * Quantize intensity to BD2606MVV driver steps.
- * Matches MATLAB Nadir_pointing.m L216-233:
  *   - Round |I| to nearest MTQ_INTENSITY_STEP (0.5 mA)
- *   - Clamp to [MTQ_MIN_INTENSITY, MTQ_MAX_INTENSITY] (0.5–150 mA)
+ *   - Snap to 0 when below MTQ_MIN_INTENSITY_MA (true deadband)
+ *   - Clamp to MTQ_MAX_INTENSITY_MA
  *   - Preserve sign
- * The snap-to-minimum ensures every axis always produces torque.
+ *
+ * Rationale: previously sub-step demands were snapped UP to MIN, forcing
+ * a permanent 0.5 mA dither even when the controller wanted zero. This
+ * created a limit cycle in nadir steady-state (oscillation never decayed
+ * because the actuator could not stay quiet). During detumble, ω×B is
+ * always far above the deadband, so this change is benign there; it
+ * only removes the dither in the final convergence phase.
  */
 static double quantize_intensity(double raw_ma)
 {
@@ -44,9 +50,9 @@ static double quantize_intensity(double raw_ma)
     /* Round to nearest step */
     double quantized = round(abs_ma / MTQ_INTENSITY_STEP_MA) * MTQ_INTENSITY_STEP_MA;
 
-    /* Clamp to [min, max] — always at least min_intensity */
+    /* Deadband: snap to 0 below the minimum addressable step */
     if (quantized < MTQ_MIN_INTENSITY_MA)
-        quantized = MTQ_MIN_INTENSITY_MA;
+        return 0.0;
     if (quantized > MTQ_MAX_INTENSITY_MA)
         quantized = MTQ_MAX_INTENSITY_MA;
 
