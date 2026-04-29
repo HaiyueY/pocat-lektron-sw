@@ -107,6 +107,7 @@ typedef struct {
     vec3d_t omega_body;             /**< Angular velocity in body frame [rad/s] */
     vec3d_t omega_filtered;         /**< Low-pass filtered gyro (for rate damping) */
     vec3d_t gyro_bias_est;          /**< Estimated gyro bias [rad/s] */
+    uint32_t bias_update_count;     /**< Valid bias-update samples (for 1/N startup) */
 
     /* Reference vectors in ECI frame */
     vec3d_t b_field_eci;            /**< Magnetic field in ECI [T] */

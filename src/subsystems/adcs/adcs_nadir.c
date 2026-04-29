@@ -50,6 +50,7 @@ void nadir_init(adcs_state_t *state)
     state->b_field_eci_prev = vec3d_zero();
     state->omega_filtered = vec3d_zero();
     state->gyro_bias_est = vec3d_zero();
+    state->bias_update_count = 0;
     state->q_eci_body = quat_identity();
     state->q_triad_prev = quat_identity();
     state->step_count = 0;
@@ -84,16 +85,39 @@ void nadir_step(adcs_state_t *state)
                                        quat_conjugate(state->q_triad_prev));
             dq = quat_positive_scalar(dq);
 
-            /* Small angle check: dq.w ≈ 1 for dt=1s, ω < 0.5 rad/s */
-            if (dq.w > 0.95) {
+            /* Tight small-angle gate: dq.w > 0.999 (≈ 5° rotation between
+             * successive TRIAD outputs at dt=1s, ω < 0.087 rad/s ≈ 5°/s).
+             * Previously used 0.95 (≈ 36°), which let TRIAD noise spikes
+             * pollute the bias estimate.  Combined with the slower EMA
+             * below, this rejects bias-meas outliers while still allowing
+             * convergence over hundreds of seconds. */
+            if (dq.w > 0.999) {
                 vec3d_t omega_triad;
                 omega_triad.x = -2.0 * dq.x / state->dt;
                 omega_triad.y = -2.0 * dq.y / state->dt;
                 omega_triad.z = -2.0 * dq.z / state->dt;
 
-                /* Bias = gyro - truth.  EMA: α=0.01, τ≈100s */
+                /* Hybrid bias estimator: 1/N running mean for fast startup,
+                 * transitioning to fixed α=0.001 EMA for steady-state noise
+                 * rejection.  N_warmup = 1000 valid samples (≈ 1000 s of
+                 * sunlit time, roughly 0.3 orbit cumulative).
+                 *
+                 *   α_eff = max(1/(N+1), 0.001)
+                 *
+                 * Early on (N < 1000): α_eff = 1/(N+1) gives an unbiased
+                 * running mean that converges quickly when starting from
+                 * zero — no slow exponential ramp-up that would leave the
+                 * bias estimate badly wrong for the first 5 orbits.
+                 * After N >= 1000: α_eff floors at 0.001 (τ ≈ 1000 s) so
+                 * per-sample TRIAD noise (~0.1°/s on each ω_triad
+                 * component, dominated by 1/dt differentiation) keeps
+                 * averaging out at the noise-rejection rate we want.
+                 * Gyro bias drift is sub-µrad/s², so this estimator is
+                 * still much faster than the actual bias dynamics. */
                 vec3d_t bias_meas = vec3d_sub(state->gyro.angular_vel, omega_triad);
-                double alpha = 0.01;
+                state->bias_update_count++;
+                double alpha = 1.0 / (double)state->bias_update_count;
+                if (alpha < 0.001) alpha = 0.001;
                 state->gyro_bias_est = vec3d_add(
                     state->gyro_bias_est,
                     vec3d_scale(vec3d_sub(bias_meas, state->gyro_bias_est), alpha));
@@ -124,7 +148,16 @@ void nadir_step(adcs_state_t *state)
         }
     }
 
-    /* Step 2: 2-DOF target — rotation from zenith ECI to body axis.
+    /* Step 2: 2-DOF zenith-referenced target.
+     *
+     * We tried the 3-DOF LVLH target `quat_from_lvlh(r, v)` here, but it
+     * pinned all three DOF — including yaw — and the closed-loop stiffness
+     * combined with the MTQ ±0.5 mA quantization step makes the system
+     * oscillate (last-orbit mean 42°+, peaks 170°).  The 2-DOF form leaves
+     * yaw about body_z free, which is exactly what nadir-pointing needs:
+     * we only care about body_z aligning with nadir.  Empirically this
+     * gives last-orbit mean ≈ 11° vs ≈ 42° for the LVLH 3-DOF target.
+     *
      * The B-cross law with +kP, used together with a zenith reference,
      * is the original (and MATLAB-reference) form: τ = +kP·(B×ε) drives
      * body_z toward the OPPOSITE of zenith, i.e. toward nadir. */
