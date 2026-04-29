@@ -105,19 +105,20 @@ int main(void)
     adcs_state_t state;
     adcs_mode_init(&state);
 
-    /* Initial conditions: post-detumble, small residual ω, random attitude */
-    vec3d_t omega_true = {0.5 * DEG_TO_RAD, -0.3 * DEG_TO_RAD, 0.2 * DEG_TO_RAD};
-
-    /* Start with 45° rotation about [1,1,1] axis */
-    double half_angle = 45.0 * DEG_TO_RAD * 0.5;
-    double s = sin(half_angle) / sqrt(3.0);
-    quat_t q_true = {cos(half_angle), s, s, s};
-    q_true = quat_normalize(q_true);
-
+    /* Initial conditions: PERFECT NADIR ATTITUDE for hold-test diagnosis.
+     * Body axes aligned with LVLH (body_z → nadir, body_x → velocity).
+     * Body ω = orbit rate so attitude is stationary in LVLH frame. */
     sim_env_t env;
     sim_env_init(&env);
     sim_gyro_state_t gyro_sim;
     sim_gyro_init(&gyro_sim);
+
+    quat_t q_true = quat_from_lvlh(env.pos_eci, env.vel_eci);
+
+    /* Orbit rate ≈ 2π/5540 ≈ 1.134e-3 rad/s about -y_body (anti orbit-normal).
+     * This is the body angular velocity required to track LVLH. */
+    const double n_orbit = 2.0 * M_PI / 5540.0;
+    vec3d_t omega_true = {0.0, -n_orbit, 0.0};
 
     /* Request nadir pointing mode */
     int rc = adcs_mode_request(&state, ADCS_MODE_NADIR_POINTING);
