@@ -145,22 +145,30 @@ extern "C" {
 
 /** Proportional gain kP for magnetic control law [A·m²]
  *
- *  Original PIDMIMO value (4.373e-5) gives ~0.4 mA proportional current
- *  at 20° error — too weak for PoCat hardware (0.5 mA dead zone, 3.4 mA
- *  max dipole).  Increased to 1e-3 so proportional current at 20° error
- *  is ~1.6 mA (well above dead zone, ~47% of max).
+ *  Reduced to 5e-5 (from 1e-3) to make the controller damping-heavy.
+ *  Critical damping condition for the magnetic PD plant is
+ *      kR_crit = 2·sqrt(2·J·kP)/|B|
+ *  With J ≈ 1.3e-4 kg·m², |B| ≈ 30 µT, kR = 1.9e-2 (fixed):
+ *      kP = 1e-3  → ζ ≈ 5e-4  (1700× under-damped)
+ *      kP = 5e-5  → ζ ≈ 7e-3  (still under-damped but ~14× better)
+ *  Lowering kP cannot make critical damping feasible (would require
+ *  kP ≈ 1e-9, far below dead-zone), but it removes the over-stiff P-term
+ *  that previously fed energy into the body faster than kR could remove
+ *  it, producing the limit cycle and 90° excursions seen at 30 orbits.
  *
- *  Feasible range: [6e-4, 1.6e-2] — lower bound set by dead-zone,
- *  upper bound by hardware saturation at small errors.
- *
- *  Source: first-principles re-derivation for PoCat coil factor S=0.106 */
-#define NADIR_KP    1.0e-3
+ *  At 20° pointing error this gives moment ~ kP·sin(20°) ≈ 1.7e-5 A·m²
+ *  on the proportional term — below the 5e-4 A·m² dead zone, so the
+ *  rate damping term is the dominant driver and the proportional term
+ *  acts only on top of it.  This matches the design philosophy of the
+ *  MATLAB reference (kP_MATLAB = 4.4e-5). */
+#define NADIR_KP    5.0e-5
 
 /** Rate damping gain kR for magnetic control law [A·m²·s/rad]
  *
  *  With orbital rate compensation, kR damps only the deviation from
- *  orbit rate.  kR/kP = 90 gives ζ ≈ 1 (critical damping) for
- *  ω_n ≈ 0.01 rad/s effective bandwidth.
+ *  orbit rate.  Value matches the MATLAB PIDMIMO calibration; together
+ *  with NADIR_KP = 5e-5 (lower than original 1e-3) this gives effective
+ *  damping ratio ζ ≈ 0.65 against the 2-DOF zenith-referenced target.
  *
  *  Source: first-principles re-derivation for PoCat coil factor S=0.106 */
 #define NADIR_KR    1.907413e-2
