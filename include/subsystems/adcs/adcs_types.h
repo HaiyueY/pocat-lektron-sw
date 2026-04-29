@@ -112,8 +112,10 @@ typedef struct {
     vec3d_t b_field_eci;            /**< Magnetic field in ECI [T] */
     vec3d_t b_field_eci_prev;       /**< Previous B-field in ECI [T] */
     vec3d_t sun_eci;                /**< Sun direction in ECI */
-    vec3d_t nadir_eci;              /**< Nadir direction in ECI */
+    vec3d_t nadir_eci;              /**< Nadir direction in ECI (unit, = -r_hat) */
     vec3d_t nadir_eci_prev;         /**< Previous nadir ECI (for orbit rate est.) */
+    vec3d_t pos_eci;                /**< Satellite position in ECI [m] (for LVLH basis) */
+    vec3d_t vel_eci;                /**< Satellite velocity in ECI [m/s] (for LVLH basis) */
 
     /* Actuator output */
     mtq_command_t mtq_cmd;
