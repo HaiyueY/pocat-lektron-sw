@@ -499,6 +499,72 @@ def plot_nadir(csv_path, output_dir):
         _save(fig, output_dir, "nadir_lvlh_euler.png")
         print(f"Nadir pointing: LVLH Euler-angle plot saved")
 
+        # --- 7. Paper-style LVLH Euler plot (hours x-axis, orbit markers) ---
+        # Orbit rate from initial r,v gives orbit period T = 2π/n.
+        h0 = np.cross(r[0], v[0])
+        n_orbit = np.linalg.norm(h0) / np.dot(r[0], r[0])
+        T_orbit_s = 2.0 * np.pi / n_orbit
+        # Use seconds internally, scale to whatever unit `t` is already in.
+        if t_label.lower().startswith("time (h"):
+            T_orbit_p = T_orbit_s / 3600.0
+            unit_label = "hours"
+        elif t_label.lower().startswith("time (m"):
+            T_orbit_p = T_orbit_s / 60.0
+            unit_label = "minutes"
+        else:
+            T_orbit_p = T_orbit_s
+            unit_label = "seconds"
+        t_p = np.asarray(t)
+
+        fig, axes = plt.subplots(3, 1, sharex=True, figsize=(10, 9))
+        fig.suptitle(
+            "Nadir-pointing LVLH Euler angles — paper-style view",
+            fontweight="bold")
+        for i, (vals, label, col) in enumerate([
+            (roll, "Roll  φ  (about LVLH-x)  [deg]", "C0"),
+            (pitch, "Pitch  θ  (about LVLH-y)  [deg]", "C3"),
+            (yaw, "Yaw  ψ  (about LVLH-z)  [deg]", "C2"),
+        ]):
+            axes[i].plot(t_p, vals, color=col, linewidth=0.8)
+            axes[i].axhline(0.0, color="k", linewidth=0.5, alpha=0.5)
+            n_orb = int(np.ceil(t_p[-1] / T_orbit_p))
+            for k in range(1, n_orb + 1):
+                axes[i].axvline(k * T_orbit_p, color="gray",
+                                linestyle="--", linewidth=0.5, alpha=0.5)
+            axes[i].set_ylabel(label)
+            axes[i].grid(True, alpha=0.3)
+            axes[i].set_title(
+                f"range = [{np.min(vals):+.1f}°, {np.max(vals):+.1f}°]",
+                fontsize=9, loc="right")
+        axes[-1].set_xlabel(
+            f"{t_label}   (dashed = orbit boundary, T = {T_orbit_p:.2f} {unit_label})")
+        _save(fig, output_dir, "nadir_lvlh_paper_style.png")
+        print(f"Nadir pointing: paper-style LVLH plot saved")
+
+        # --- 8. Post-acquisition zoom (skip first orbit) ---
+        mask = t_p >= T_orbit_p
+        if mask.sum() > 100:
+            fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+            ax.plot(t_p[mask], np.asarray(roll)[mask],
+                    label="roll  φ", color="C0", linewidth=1.0)
+            ax.plot(t_p[mask], np.asarray(pitch)[mask],
+                    label="pitch  θ", color="C3", linewidth=1.0)
+            ax.axhline(0.0, color="k", linewidth=0.5)
+            n_orb = int(np.ceil(t_p[-1] / T_orbit_p))
+            for k in range(1, n_orb + 1):
+                ax.axvline(k * T_orbit_p, color="gray",
+                           linestyle="--", linewidth=0.5, alpha=0.5)
+            ax.set_xlabel(t_label)
+            ax.set_ylabel("Euler angle [deg]")
+            ax.set_title(
+                "Roll & Pitch in LVLH frame, post-acquisition\n"
+                "(±-symmetric oscillation crossing zero — classical "
+                "underdamped behaviour visible after IC transient)")
+            ax.legend(loc="upper right")
+            ax.grid(True, alpha=0.3)
+            _save(fig, output_dir, "nadir_lvlh_paper_style_zoom.png")
+            print(f"Nadir pointing: paper-style LVLH zoom plot saved")
+
 
 # ---------------------------------------------------------------------------
 # Main entry point
