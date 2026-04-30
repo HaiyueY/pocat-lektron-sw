@@ -316,10 +316,74 @@ The roll/pitch bounds correspond directly to the
 | 40 – 44 h | 4.3° | 10.7° |
 | 44 – 48 h | 5.2° | 10.9° |
 
-The earlier long-period limit cycle is gone: every window has the
-same statistical character. Performance is comparable to the Sugimura
-2016 reference (`1.7° avg, <5° kept for 10.5 h`), achieved with a
-substantially simpler controller (B-cross PD versus SR-Inverse).
+### 8.4 MATLAB-mimic IC test (paper-style convergence)
+
+To compare more directly with the MATLAB reference, a second scenario
+is provided in `test_nadir.c`: random initial quaternion, ω₀ = (n, −n, n)
+(off-axis from the orbit normal, magnitude √3·n ≈ 0.18°/s), 5-orbit
+duration, eclipse on. This matches the IC distribution used in
+`ref/.../Sim_sat_initial_state.m` and `Sim_time_parameters.m`.
+
+Per-orbit summary:
+
+| Orbit |   Mean |    Max |   Min  |  ⟨\|ω\|⟩      |
+|-------|-------:|-------:|-------:|----------:|
+| 1     | 13.96° | 91.88° |  1.41° | 0.077°/s |
+| 2     |  4.14° | 10.52° |  0.49° | 0.067°/s |
+| 3     |  3.94° |  7.88° |  1.38° | 0.070°/s |
+| 4     |  2.00° |  5.07° |  0.02° | 0.067°/s |
+| 5     |  4.28° |  7.54° |  1.91° | 0.071°/s |
+
+|ω| converges from 0.113°/s (= √3·n) to ≈ 0.067°/s (= n, the LVLH
+orbit-tracking rate). First crossing of 20° at t = 19.7 min (0.21 orbits).
+
+**Two additional figures are produced** (`plot_results.py::plot_nadir`):
+
+* `nadir_lvlh_paper_style.png` — three-panel roll/pitch/yaw vs. time
+  with orbit-boundary dashed lines, in the visual style the paper uses.
+* `nadir_lvlh_paper_style_zoom.png` — roll & pitch overlaid, IC
+  transient cropped, to show the post-acquisition limit cycle clearly.
+
+These plots reveal the **classical underdamped second-order PD response
+envelope** that the scalar `pointing_error` metric (a non-negative
+arccos) hides:
+
+* **Pitch θ** acquires with a textbook overshoot pattern:
+  +5° → +28.7° (first peak, t ≈ 0.17 h) → −10.5° (second peak, t ≈ 2.6 h)
+  → +4° (third peak) → ±5° steady-state limit cycle.
+  Successive-peak ratio ≈ 0.37 ⇒ logarithmic decrement Λ ≈ 1.0
+  ⇒ damping ratio ζ ≈ 0.16 (clearly underdamped).
+* **Roll φ** acquires from −91.9° to ≈ 0 over the first orbit with
+  *no overshoot* (over-damped on this axis — magnetic field has higher
+  cross-axis controllability for roll than pitch in this orbit).
+* **Yaw ψ** drifts continuously through ±180°, confirming visually
+  that the controller is by construction yaw-invariant (§3.2).
+
+**Why the envelope does not keep shrinking past orbit 2:** the system
+is *not* a stationary second-order PD. Three structural effects pin
+the steady-state error to a 3–5° mean / 5–10° peak limit cycle:
+
+1. **Time-varying control authority.** B rotates with the orbit, so
+   the matrix `b̂×` projecting the PD law onto body torques is
+   periodic. Errors momentarily aligned with B are uncontrollable in
+   that instant and grow until B turns.
+2. **Continuous disturbance torques.** Gravity gradient (~10⁻⁷ N·m
+   peak), residual magnetic dipole, and aerodynamic torque inject
+   energy continuously. With magnetorquers as the only actuator,
+   these can only be sunk in the directions B-cross currently
+   controls.
+3. **MTQ ±m_max quantization.** The 1st-order Σ-Δ modulator outputs
+   discrete pulses; below a threshold roughly proportional to
+   `1/(K_P · |B|² · Δt)`, errors hover around the quantization noise
+   floor instead of decaying further.
+
+The reference paper's plots appear smoother because (a) the simulation
+spans only 5 orbits — the IC transient dominates and the limit cycle
+is barely visible, (b) hysteresis rods provide all-direction passive
+damping that PoCat does not have, and (c) the linear y-axis spanning
+~120° visually compresses the ±5° steady-state band. Re-running our
+sim for 5 orbits with hysteresis rods would reproduce the paper-style
+look.
 
 ---
 
