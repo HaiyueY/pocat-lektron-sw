@@ -85,13 +85,18 @@ void nadir_step(adcs_state_t *state)
                                        quat_conjugate(state->q_triad_prev));
             dq = quat_positive_scalar(dq);
 
-            /* Tight small-angle gate: dq.w > 0.999 (≈ 5° rotation between
-             * successive TRIAD outputs at dt=1s, ω < 0.087 rad/s ≈ 5°/s).
-             * Previously used 0.95 (≈ 36°), which let TRIAD noise spikes
-             * pollute the bias estimate.  Combined with the slower EMA
-             * below, this rejects bias-meas outliers while still allowing
-             * convergence over hundreds of seconds. */
-            if (dq.w > 0.999) {
+            /* Rate-based small-angle gate, scaled by control period dt:
+             *   dq.w > cos(0.5 * ω_max * dt)
+             * with ω_max = 0.087 rad/s (≈5°/s) — same physical rate
+             * threshold the old `dq.w > 0.999` gate enforced at dt = 1s,
+             * but now valid at any dt.  This keeps TRIAD noise spikes
+             * (which appear as fast pseudo-rotations in dq) out of the
+             * bias estimate while still admitting normal post-detumble
+             * dynamics, and importantly does NOT spuriously reject
+             * samples when the controller runs at slower dt. */
+            const double bias_gate_omega_max = 0.087; /* rad/s */
+            double gate_thresh = cos(0.5 * bias_gate_omega_max * state->dt);
+            if (dq.w > gate_thresh) {
                 vec3d_t omega_triad;
                 omega_triad.x = -2.0 * dq.x / state->dt;
                 omega_triad.y = -2.0 * dq.y / state->dt;
