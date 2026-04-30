@@ -141,7 +141,13 @@ int main(void)
     sim_gyro_state_t gyro_sim;
     sim_gyro_init(&gyro_sim);
 
-    quat_t q_true = quat_from_lvlh(env.pos_eci, env.vel_eci);
+    /* Initial attitude: body +Z points to ZENITH (i.e., +r̂_eci),
+     * a 180° rotation about body x from the nominal nadir attitude.
+     * This is the "worst-case" pointing IC (initial error = 180°). */
+    quat_t q_nadir = quat_from_lvlh(env.pos_eci, env.vel_eci);
+    quat_t q_flip  = {0.0, 1.0, 0.0, 0.0};   /* 180° rotation about x */
+    quat_t q_true  = quat_multiply(q_flip, q_nadir);
+    q_true = quat_normalize(q_true);
 
     /* Orbit rate ≈ 2π/5540 ≈ 1.134e-3 rad/s about -y_body (anti orbit-normal).
      * This is the body angular velocity required to track LVLH. */
