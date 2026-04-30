@@ -26,8 +26,8 @@
 #include "sim_photodiode.h"
 #include "sim_mtq_driver.h"
 
-/** Total simulated time [s] — ~30 orbital periods at 400 km */
-#define SIM_TIME_LIMIT  166200.0
+/** Total simulated time [s] — 5 orbital periods (MATLAB-mimic test) */
+#define SIM_TIME_LIMIT  27700.0
 
 /** Adaptive control rate parameters.
  *
@@ -141,18 +141,20 @@ int main(void)
     sim_gyro_state_t gyro_sim;
     sim_gyro_init(&gyro_sim);
 
-    /* Initial attitude: body +Z points to ZENITH (i.e., +r̂_eci),
-     * a 180° rotation about body x from the nominal nadir attitude.
-     * This is the "worst-case" pointing IC (initial error = 180°). */
-    quat_t q_nadir = quat_from_lvlh(env.pos_eci, env.vel_eci);
-    quat_t q_flip  = {0.0, 1.0, 0.0, 0.0};   /* 180° rotation about x */
-    quat_t q_true  = quat_multiply(q_flip, q_nadir);
+    /* Initial attitude: MATLAB-mimic — a "random-looking" fixed quaternion
+     * from MATLAB Sim_sat_initial_state.m commented options.
+     * (MATLAB uses randn(4,1)/norm; we pick a reproducible one to compare.) */
+    quat_t q_true = {0.282051597168532, 0.683091541439498,
+                     0.613312153382015, 0.278713194991566};
     q_true = quat_normalize(q_true);
+    (void)quat_from_lvlh; /* unused in this IC */
 
     /* Orbit rate ≈ 2π/5540 ≈ 1.134e-3 rad/s about -y_body (anti orbit-normal).
-     * This is the body angular velocity required to track LVLH. */
+     * MATLAB-mimic ω_0 = (n, -n, n): magnitude √3·n, deliberately
+     * off-axis from orbit-normal so the controller must do real damping
+     * work (cf. Sim_sat_initial_state.m line 27). */
     const double n_orbit = 2.0 * M_PI / 5540.0;
-    vec3d_t omega_true = {0.0, -n_orbit, 0.0};
+    vec3d_t omega_true = {n_orbit, -n_orbit, n_orbit};
 
     /* Request nadir pointing mode */
     int rc = adcs_mode_request(&state, ADCS_MODE_NADIR_POINTING);
