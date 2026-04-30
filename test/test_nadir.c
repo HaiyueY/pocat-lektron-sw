@@ -26,10 +26,31 @@
 #include "sim_photodiode.h"
 #include "sim_mtq_driver.h"
 
-/** Maximum simulation steps (~15 orbits at 400km, period≈5540s)
- *  MATLAB gains need 10-15 orbits to converge from post-detumble ω≈0.6°/s.
- *  Diagnostic sweep confirmed mean error ~10° at this duration. */
-#define MAX_STEPS   166200
+/** Total simulated time [s] — ~30 orbital periods at 400 km */
+#define SIM_TIME_LIMIT  166200.0
+
+/** Adaptive control rate parameters.
+ *
+ * Diagnostic study (2026-04-30) showed that PD analytical output is
+ * below the MTQ 0.5 mA quantization step for any reasonable err < 30°,
+ * so sensor noise drives the actuator across the deadband and the
+ * resulting quantization-bias pumps energy into the body.  Slowing
+ * the control loop averages per-sample noise and pushes more cycles
+ * below the dead zone — but a fixed slow rate cannot react during
+ * recovery from large excursions.
+ *
+ * Adaptive scheme: switch between a fast rate (1 s, used during
+ * acquire/recovery) and a slow rate (10 s, used in steady-state hold)
+ * based on instantaneous pointing error.  Hysteresis bands prevent
+ * chattering at the boundary. */
+#define DT_FAST            1.0    /* control period during acquire/recovery [s] */
+#define DT_HOLD            1.0    /* control period during quiet hold [s] */
+/* Effectively-disabled hysteresis: stay in fast (= dt=1s) mode permanently
+ * for now while we're testing Σ-Δ dither.  Σ-Δ's noise-shaping benefit
+ * scales with sample rate, so dt=1s is the correct test bench.  After
+ * Σ-Δ is validated we can revisit slow-rate hold mode if needed. */
+#define ERR_ENTER_HOLD   180.0
+#define ERR_EXIT_HOLD    181.0
 
 /** Physics sub-step for numerical stability */
 #define PHYSICS_DT  0.01
@@ -38,7 +59,14 @@
 
 /** CSV output path */
 #define CSV_DIR     "results"
+#ifndef FREE_FLIGHT
+#define FREE_FLIGHT 0
+#endif
+#if FREE_FLIGHT
+#define CSV_FILE    CSV_DIR "/nadir_freeflight.csv"
+#else
 #define CSV_FILE    CSV_DIR "/nadir.csv"
+#endif
 
 /**
  * @brief Compute pointing error angle between body Z-axis and nadir.
@@ -151,10 +179,27 @@ int main(void)
     int was_above = 1;           /* track threshold crossings */
     double last_orbit_sum = 0.0;
     int last_orbit_count = 0;
-    int last_orbit_start = MAX_STEPS - 5540; /* last orbit ≈ 5540 steps */
+    const double last_orbit_start_time = SIM_TIME_LIMIT - 5540.0;
 
-    for (int step = 0; step < MAX_STEPS; step++) {
-        double dt = ADCS_CONTROL_DT;
+    double sim_time = 0.0;
+    double dt = DT_HOLD;          /* initial: assume we start in hold */
+    int hold_mode = 1;            /* hysteresis state */
+    int step = 0;
+    int log_counter = 0;
+    long fast_steps = 0, hold_steps = 0;
+
+    while (sim_time < SIM_TIME_LIMIT) {
+        /* Choose control period for this step based on current pointing
+         * error (computed before sim_env_step so it reflects the state
+         * the controller will actually see). */
+        double err_now = compute_pointing_error(q_true, env.nadir_eci);
+        if (hold_mode) {
+            if (err_now > ERR_EXIT_HOLD) hold_mode = 0;
+        } else {
+            if (err_now < ERR_ENTER_HOLD) hold_mode = 1;
+        }
+        dt = hold_mode ? DT_HOLD : DT_FAST;
+        if (hold_mode) hold_steps++; else fast_steps++;
 
         sim_env_step(&env, dt);
 
@@ -174,6 +219,10 @@ int main(void)
         /* Run controller */
         adcs_mode_step(&state);
 
+#if FREE_FLIGHT
+        state.mtq_cmd.dipole = vec3d_zero();
+#endif
+
         /* Apply torque with sub-stepping */
         vec3d_t b_body = quat_rotate_vec(q_true, env.b_field_eci);
         vec3d_t torque;
@@ -187,14 +236,15 @@ int main(void)
             attitude_step(&q_true, omega_true, PHYSICS_DT);
         }
 
-        /* Compute pointing error */
+        sim_time += dt;
+
+        /* Compute pointing error after propagation */
         double err = compute_pointing_error(q_true, env.nadir_eci);
         double omega_mag = vec3d_norm(omega_true) * RAD_TO_DEG;
         double dipole_mag = vec3d_norm(state.mtq_cmd.dipole);
 
         if (err < min_error) min_error = err;
 
-        /* Check steady-state criterion */
         if (err < 20.0) {
             steady_count++;
             if (was_above) {
@@ -206,19 +256,17 @@ int main(void)
             was_above = 1;
         }
 
-        /* Accumulate last-orbit statistics */
-        if (step >= last_orbit_start) {
+        if (sim_time >= last_orbit_start_time) {
             last_orbit_sum += err;
             last_orbit_count++;
         }
 
-        /* Write CSV row */
         if (csv) {
             fprintf(csv, "%d,%.1f,%.6f,%.10e,%.10e,%.10e,%.10e,"
                          "%.10e,%.10e,%.10e,"
                          "%.10e,%.10e,%.10e,"
                          "%.10f,%.10f,%.10f,%.10f,%d\n",
-                    step, step * dt,
+                    step, sim_time,
                     err,
                     omega_true.x, omega_true.y, omega_true.z,
                     vec3d_norm(omega_true),
@@ -228,18 +276,18 @@ int main(void)
                     env.eclipse ? 1 : 0);
         }
 
-        if (step % LOG_INTERVAL == 0) {
+        if (log_counter++ % LOG_INTERVAL == 0) {
             printf("%6d  %10.2f  %10.4f  %10.6f  %7s\n",
                    step, err, omega_mag, dipole_mag,
                    env.eclipse ? "YES" : "NO");
         }
 
-        /* First convergence announcement */
         if (steady_count >= 100 && !first_convergence) {
-            printf("\n=== NADIR POINTING ACHIEVED at step %d ===\n", step);
+            printf("\n=== NADIR POINTING ACHIEVED at t=%.0fs ===\n", sim_time);
             printf("Pointing error: %.2f deg\n", err);
             first_convergence = 1;
         }
+        step++;
     }
 
     if (csv) fclose(csv);
@@ -252,6 +300,9 @@ int main(void)
     printf("Nadir acquisitions:      %d  (error crossed below 20°)\n",
            nadir_acquisitions);
     printf("Mean error (last orbit): %.2f deg\n", mean_last_orbit);
+    printf("Adaptive rate: hold steps=%ld (%.1f%%), fast steps=%ld (%.1f%%)\n",
+           hold_steps, 100.0*hold_steps/(hold_steps+fast_steps),
+           fast_steps, 100.0*fast_steps/(hold_steps+fast_steps));
 
     /*
      * Pass criteria for magnetic-only B-cross control:
