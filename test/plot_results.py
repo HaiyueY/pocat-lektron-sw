@@ -429,6 +429,76 @@ def plot_nadir(csv_path, output_dir):
 
     print(f"Nadir pointing: 5 plots saved to {output_dir}")
 
+    # --- 6. LVLH Euler angles (roll/pitch/yaw of body w.r.t. LVLH) ---
+    if all(c in df.columns for c in ("pos_x", "pos_y", "pos_z",
+                                      "vel_x", "vel_y", "vel_z")):
+        import numpy as np
+        r = df[["pos_x", "pos_y", "pos_z"]].values
+        v = df[["vel_x", "vel_y", "vel_z"]].values
+        qw = df["quat_w"].values
+        qx = df["quat_x"].values
+        qy = df["quat_y"].values
+        qz = df["quat_z"].values
+
+        # Active Rodrigues rotation matrix R_a from quaternion (Hamilton).
+        # The C code quat_rotate_vec(q, v) implements v' = v + 2w(e×v)
+        # + 2(e×(e×v)), and the convention is
+        # quat_rotate_vec(q_eci_body, v_eci) = v_body, so R_a(q_eci_body)
+        # is the ECI→Body coordinate-transformation matrix.
+        n = len(qw)
+        R_eb = np.empty((n, 3, 3))
+        R_eb[:, 0, 0] = 1 - 2 * (qy * qy + qz * qz)
+        R_eb[:, 0, 1] = 2 * (qx * qy - qw * qz)
+        R_eb[:, 0, 2] = 2 * (qx * qz + qw * qy)
+        R_eb[:, 1, 0] = 2 * (qx * qy + qw * qz)
+        R_eb[:, 1, 1] = 1 - 2 * (qx * qx + qz * qz)
+        R_eb[:, 1, 2] = 2 * (qy * qz - qw * qx)
+        R_eb[:, 2, 0] = 2 * (qx * qz - qw * qy)
+        R_eb[:, 2, 1] = 2 * (qy * qz + qw * qx)
+        R_eb[:, 2, 2] = 1 - 2 * (qx * qx + qy * qy)
+
+        # LVLH frame in ECI:  z_lvlh = -r̂ (nadir),
+        #                     y_lvlh = -(r × v)̂  (negative orbit normal),
+        #                     x_lvlh = y_lvlh × z_lvlh   (≈ velocity).
+        rn = r / np.linalg.norm(r, axis=1, keepdims=True)
+        h = np.cross(r, v)
+        hn = h / np.linalg.norm(h, axis=1, keepdims=True)
+        z_l = -rn
+        y_l = -hn
+        x_l = np.cross(y_l, z_l)
+        x_l /= np.linalg.norm(x_l, axis=1, keepdims=True)
+
+        # R_lvlh_eci has LVLH basis vectors (in ECI) as columns.
+        R_le = np.stack([x_l, y_l, z_l], axis=2)  # shape (n,3,3)
+        # R_lvlh_body = R_eci_body · R_lvlh_eci
+        R_lb = np.einsum("nij,njk->nik", R_eb, R_le)
+
+        # Z-Y-X intrinsic Euler (yaw ψ, pitch θ, roll φ) — same convention
+        # used by the reference paper for nadir-pointing performance plots.
+        # roll  = atan2(R[2,1], R[2,2])
+        # pitch = -asin(R[2,0])
+        # yaw   = atan2(R[1,0], R[0,0])
+        roll = np.degrees(np.arctan2(R_lb[:, 2, 1], R_lb[:, 2, 2]))
+        pitch = np.degrees(-np.arcsin(np.clip(R_lb[:, 2, 0], -1.0, 1.0)))
+        yaw = np.degrees(np.arctan2(R_lb[:, 1, 0], R_lb[:, 0, 0]))
+
+        fig, axes = plt.subplots(3, 1, sharex=True)
+        fig.suptitle("Body Attitude in LVLH Frame (ZYX Euler)",
+                     fontweight="bold")
+        for i, (vals, label, col) in enumerate([
+            (roll, "Roll φ (deg)", "C0"),
+            (pitch, "Pitch θ (deg)", "C1"),
+            (yaw, "Yaw ψ (deg)", "C2"),
+        ]):
+            axes[i].plot(t, vals, color=col, linewidth=0.6)
+            axes[i].axhline(0.0, color="k", linewidth=0.5, alpha=0.4)
+            _add_eclipse_shading(axes[i], t, eclipse)
+            axes[i].set_ylabel(label)
+            axes[i].grid(True, alpha=0.3)
+        axes[-1].set_xlabel(t_label)
+        _save(fig, output_dir, "nadir_lvlh_euler.png")
+        print(f"Nadir pointing: LVLH Euler-angle plot saved")
+
 
 # ---------------------------------------------------------------------------
 # Main entry point

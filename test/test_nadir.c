@@ -165,7 +165,8 @@ int main(void)
         fprintf(csv, "step,time_s,err_deg,omega_x,omega_y,omega_z,omega_mag,"
                       "dipole_x,dipole_y,dipole_z,"
                       "torque_x,torque_y,torque_z,"
-                      "quat_w,quat_x,quat_y,quat_z,eclipse\n");
+                      "quat_w,quat_x,quat_y,quat_z,"
+                      "pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,eclipse\n");
     }
 
     printf("%6s  %10s  %10s  %10s  %7s\n",
@@ -265,7 +266,8 @@ int main(void)
             fprintf(csv, "%d,%.1f,%.6f,%.10e,%.10e,%.10e,%.10e,"
                          "%.10e,%.10e,%.10e,"
                          "%.10e,%.10e,%.10e,"
-                         "%.10f,%.10f,%.10f,%.10f,%d\n",
+                         "%.10f,%.10f,%.10f,%.10f,"
+                         "%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d\n",
                     step, sim_time,
                     err,
                     omega_true.x, omega_true.y, omega_true.z,
@@ -273,6 +275,8 @@ int main(void)
                     state.mtq_cmd.dipole.x, state.mtq_cmd.dipole.y, state.mtq_cmd.dipole.z,
                     torque.x, torque.y, torque.z,
                     q_true.w, q_true.x, q_true.y, q_true.z,
+                    env.pos_eci.x, env.pos_eci.y, env.pos_eci.z,
+                    env.vel_eci.x, env.vel_eci.y, env.vel_eci.z,
                     env.eclipse ? 1 : 0);
         }
 
