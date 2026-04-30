@@ -54,6 +54,7 @@ void nadir_init(adcs_state_t *state)
     state->q_eci_body = quat_identity();
     state->q_triad_prev = quat_identity();
     state->step_count = 0;
+    mtq_reset_accumulator();
 }
 
 void nadir_step(adcs_state_t *state)
@@ -153,35 +154,41 @@ void nadir_step(adcs_state_t *state)
         }
     }
 
-    /* Step 2: 2-DOF zenith-referenced target.
+    /* Step 2: Compute yaw-invariant 2-DOF reduced-attitude error.
      *
-     * We tried the 3-DOF LVLH target `quat_from_lvlh(r, v)` here, but it
-     * pinned all three DOF — including yaw — and the closed-loop stiffness
-     * combined with the MTQ ±0.5 mA quantization step makes the system
-     * oscillate (last-orbit mean 42°+, peaks 170°).  The 2-DOF form leaves
-     * yaw about body_z free, which is exactly what nadir-pointing needs:
-     * we only care about body_z aligning with nadir.  Empirically this
-     * gives last-orbit mean ≈ 11° vs ≈ 42° for the LVLH 3-DOF target.
+     * IMPORTANT: a previous implementation built `q_target` from
+     * `quat_from_two_vectors(zenith_eci, body_axis)` and then used
+     * `ε = vector(q_target ⊗ conj(q_est))`.  That is NOT yaw-invariant:
+     * `quat_from_two_vectors` returns ONE arbitrary minimum-rotation
+     * quaternion among an entire yaw-family of valid attitudes, so
+     * even at a perfectly nadir-pointing body with arbitrary yaw the
+     * resulting `ε` is generally nonzero — the controller injects a
+     * spurious P-command at the supposed equilibrium and the closed
+     * loop slowly drifts away from a perfect nadir IC.
      *
-     * The B-cross law with +kP, used together with a zenith reference,
-     * is the original (and MATLAB-reference) form: τ = +kP·(B×ε) drives
-     * body_z toward the OPPOSITE of zenith, i.e. toward nadir. */
-    vec3d_t zenith_eci = vec3d_scale(vec3d_normalize(state->nadir_eci), -1.0);
-    vec3d_t body_axis = vec3d_make(NADIR_BODY_AXIS_X,
-                                   NADIR_BODY_AXIS_Y,
-                                   NADIR_BODY_AXIS_Z);
-    quat_t q_target = quat_from_two_vectors(zenith_eci, body_axis);
-
-    /* Step 3: Error quaternion
-     * q_err = q_target ⊗ conj(q_est) — error in current body frame */
-    quat_t q_est_conj = quat_conjugate(state->q_eci_body);
-    quat_t q_err = quat_multiply(q_target, q_est_conj);
-
-    /* Step 4: Enforce positive scalar part */
-    q_err = quat_positive_scalar(q_err);
-
-    /* Step 5: Extract vector part ε (attitude error in body frame) */
-    vec3d_t epsilon = quat_vector_part(q_err);
+     * Correct reduced-attitude error (yaw-invariant by construction):
+     *   nadir_body = R(q_eci_body) · n̂_eci   (nadir direction in body)
+     *   ε = ẑ_body × nadir_body
+     *
+     * Properties:
+     *   - ε.z ≡ 0  (pure pitch/roll error, as required for 2-DOF)
+     *   - |ε| = sin(θ) where θ is the angle between ẑ_body and nadir
+     *   - ε direction is the rotation axis that brings ẑ_body to nadir
+     *   - INVARIANT under any rotation about ẑ_body (i.e. any yaw)
+     *
+     * Sign: ε points along the angular-velocity direction needed to
+     * align ẑ_body with nadir_body, so the B-cross law
+     *   m = +kP·(B×ε)/|B|   →   τ = m×B ≈ +kP·|B|·(ε⊥B)
+     * drives ẑ_body toward nadir as desired.  This is the same sign
+     * convention as `Nadir_pointing.m` L180 in the MATLAB reference
+     * once that reference's `quaternion error` is reduced to its
+     * yaw-invariant projection. */
+    vec3d_t nadir_eci_unit = vec3d_normalize(state->nadir_eci);
+    vec3d_t nadir_body = quat_rotate_vec(state->q_eci_body, nadir_eci_unit);
+    vec3d_t body_z_axis = vec3d_make(NADIR_BODY_AXIS_X,
+                                     NADIR_BODY_AXIS_Y,
+                                     NADIR_BODY_AXIS_Z);
+    vec3d_t epsilon = vec3d_cross(body_z_axis, nadir_body);
 
     /* Step 6: Magnetic control law with orbit-rate-compensated damping.
      *   m = ( +kP·B×ε − kR·B×ω̃ ) / |B|
