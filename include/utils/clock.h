@@ -1,8 +1,10 @@
 /**
  * @file clock.h
  * @brief Dynamic system clock frequency switching for power management.
- *
- * Initializes and switches the system clock based on a requested frequency.
+ * @details
+ * Provides startup clock configuration and runtime switching between the
+ * supported system clock modes: 80 MHz using HSI+PLL, 8 MHz using MSI range 7,
+ * and 2 MHz using MSI range 5.
  */
 
 #ifndef INC_CLOCK_H_
@@ -10,10 +12,13 @@
 
 #include <stdbool.h>
 
+/**
+ * @brief Supported system clock frequency modes.
+ */
 typedef enum {
-    CLK_FREQ_80MHZ,
-    CLK_FREQ_8MHZ,
-    CLK_FREQ_2MHZ
+    CLK_FREQ_80MHZ,  /**< 80 MHz system clock using HSI with PLL. */
+    CLK_FREQ_8MHZ,   /**< 8 MHz system clock using MSI range 7. */
+    CLK_FREQ_2MHZ    /**< 2 MHz system clock using MSI range 5. */
 } ClockFreq_t;
 
 /**

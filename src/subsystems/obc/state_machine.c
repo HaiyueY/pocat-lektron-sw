@@ -20,8 +20,6 @@
 static uint32_t tasks_for_state(ObcState_t state);
 static void change_state(ObcState_t *currentState, ObcState_t newState);
 
-/* ---- Public API ---- */
-
 bool state_machine_boot(ObcState_t state)
 {
     uint32_t running = tasks_for_state(state);
@@ -53,8 +51,6 @@ void check_next_state(ObcState_t *currentState, uint32_t notificationValue)
     }
 }
 
-/* ---- Private ---- */
-
 ClockFreq_t freq_for_state(ObcState_t state)
 {
     switch (state) {
@@ -64,6 +60,11 @@ ClockFreq_t freq_for_state(ObcState_t state)
     }
 }
 
+/**
+ * @brief Return the subsystem task mask that should run in a given OBC state.
+ * @param state OBC operational state.
+ * @return Bitmask of TM_TASK_* values for tasks that should be active.
+ */
 static uint32_t tasks_for_state(ObcState_t state)
 {
     switch (state) {
@@ -86,6 +87,16 @@ static uint32_t tasks_for_state(ObcState_t state)
     }
 }
 
+/**
+ * @brief Transition from the current OBC state to a new state.
+ *
+ * Persists the previous state, pauses tasks from the old state, switches clock
+ * and peripheral configuration if required, resumes tasks for the new state,
+ * and persists the new current state.
+ *
+ * @param currentState Pointer to the current OBC state.
+ * @param newState State to transition into.
+ */
 static void change_state(ObcState_t *currentState, ObcState_t newState)
 {
     OBDH_Write_Request(PREVIOUS_STATE_ADDR, (uint8_t*)currentState, sizeof(ObcState_t));

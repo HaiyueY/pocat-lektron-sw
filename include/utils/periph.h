@@ -1,12 +1,12 @@
 /**
  * @file periph.h
  * @brief Peripheral handle declarations and initialization helpers.
- * @author Guillermo O'Tuama Pascual
- * @date 2026-01-20
- * TODO:
+ * @details
  * Exposes the global STM32 HAL peripheral handles used across the firmware and
  * the public entry points for peripheral initialization and clock-dependent
  * reconfiguration.
+ * @author Guillermo O'Tuama Pascual
+ * @date 2026-01-20
  */
 
 #ifndef INC_UTILS_PERIPH_H_

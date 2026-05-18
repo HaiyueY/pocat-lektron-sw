@@ -1,6 +1,6 @@
 /**
  * @file comms.c
- * @brief Communications task: protocol logic and packet processing.
+ * @brief Implementation of the communications task: protocol logic and packet processing.
  *
  * This task handles application-level operations:
  * - Receiving packets from transceiver_task via rx_queue

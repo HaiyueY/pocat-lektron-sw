@@ -1,18 +1,11 @@
 /**
  * @file obdh.c
  * @author Medir Segura medir.segura@estudiantat.upc.edu
- * @brief oversees the management of internal data within the spacecraft. Its primary focus includes 
-    housekeeping data, scientific data, and configurations, as well as managing access to flash 
-    memory. (primary focus now is saving and retrieving data from flash)
- * @version 0.1
- * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
+ * @brief Implementation of the OBDH task.
  * 
  */
 
 
-/* ---- Includes ---- */
 #include "obdh.h"
 #include <stdbool.h>
 #include <stdio.h>
@@ -25,23 +18,12 @@
 #include "notifications.h"
 #include "task_management.h"
 
-/* ---- Macros and constants ---- */
-// ..
-
-/* ---- Type definitions ---- */
-// ..
-
-/* ---- Module-level variables ---- */
-// ..
 QueueHandle_t obdh_queue_handle;
 static uint32_t deferred_notifications;
-/* ---- Private function prototypes ---- */
-void setup_obdh(void);
-void process_obdh(void);
-static uint32_t wait_for_notification(void);
 
+static void setup_obdh(void);
+static void process_obdh(void);
 
-/* ---- Public function definitions ---- */
 
 void obdh_task(void *pv_parameters) {
     (void)pv_parameters;
@@ -55,21 +37,24 @@ void obdh_task(void *pv_parameters) {
 
 }
 
-/* ---- Private function definitions ---- */
-
-void setup_obdh(void) {
+/**
+ * @brief Initialize OBDH task state.
+ */
+static void setup_obdh(void) {
     deferred_notifications = 0;
     // Apply the default configuration
 
 }
 
 /**
- * @brief This process waits for an element of the queue to be recived,
- * a request. The request can be to read flash or to write flash.
- * When operations are done, then a notification(with flags) is
- * given to the OBC with an event. 
+ * @brief Execute one OBDH task processing cycle.
+ *
+ * Handles pause/resume notifications, receives one pending flash request from
+ * the OBDH queue, performs the requested read or write operation, stores the
+ * operation status in the request result pointer, and notifies the requesting
+ * task when the operation is complete.
  */
-void process_obdh(void) {
+static void process_obdh(void) {
 
     uint32_t notifications = 0;
     notifications = wait_for_notification();
@@ -117,11 +102,4 @@ void process_obdh(void) {
         }
         
     }
-}
-
-static uint32_t wait_for_notification(void)
-{
-    uint32_t notificationValue = 0;
-    xTaskNotifyWait(0, 0xFFFFFFFF, &notificationValue, 0);
-    return notificationValue;
 }

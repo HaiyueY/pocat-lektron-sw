@@ -1,9 +1,12 @@
-/*
- * flash2.c
- *
- *  Created on: 17 ene. 2023
- *      Author: NilRi
- * Modified on: 4 march 2026 
+/**
+ * @file flash.c
+ * @brief Internal flash memory access implementation.
+ * @details
+ * Implements raw STM32 flash page erase/write helpers and request functions
+ * that route task flash access through the OBDH queue.
+ * @author Medir Segura
+ * @date 2023-01-17
+ * @note Modified on 2026-03-04.
  */
 
 

@@ -10,11 +10,14 @@
 #include <stdbool.h>
 #include "clock.h"
 
+/**
+ * @brief OBC operational states.
+ */
 typedef enum {
-    NOMINAL,
-    CONTINGENCY,
-    SUNSAFE,
-    SURVIVAL
+    NOMINAL,      /**< Normal mission operation. */
+    CONTINGENCY,  /**< Reduced-operation state used when recoverable faults occur. */
+    SUNSAFE,      /**< Power-positive safe state intended to maintain solar charging. */
+    SURVIVAL      /**< Minimum-power state used to preserve spacecraft safety. */
 } ObcState_t;
 
 /**

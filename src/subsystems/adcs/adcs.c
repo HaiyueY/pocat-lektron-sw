@@ -1,16 +1,10 @@
 /**
- * @file adcs.c
- * @author your name (you@domain.com)
- * @brief The ADCS software processes sensor data, executes algorithms to determine the satellite's 
-    position, and issues commands to control and stabilize its orientation.
- * @version 0.1
+ * @file adcs.c 
+ * @brief Implementation of the ADCS task.
  * @date 2026-01-20
- * 
- * @copyright Copyright (c) 2026
  * 
  */
 
-/* ---- Includes ---- */
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -21,24 +15,16 @@
 #include "notifications.h"
 #include "task_management.h"
 
-/* ---- Macros and constants ---- */
 #define ADCS_DETUMBLING_MODE (1 << 0)
 #define ADCS_NADIR_POINTING_MODE (1 << 1)
 
-/* ---- Type definitions ---- */
-// ..
-
-/* ---- Module-level variables ---- */
+/** @brief Notification bits deferred while the ADCS task is paused. */
 static uint32_t deferred_notifications;
 
-/* ---- Private function prototypes ---- */
 static void setup_adcs(void);
 static void process_adcs(void);
-static uint32_t wait_for_notification(void);
 static void detumble(void);
 static void point_to_nadir(void);
-
-/* ---- Public function definitions ---- */
 
 void adcs_task(void *pv_parameters) {
     (void)pv_parameters;
@@ -50,13 +36,20 @@ void adcs_task(void *pv_parameters) {
     }
 }
 
-/* ---- Private function definitions ---- */
-
+/**
+ * @brief Initialize ADCS task state.
+ */
 static void setup_adcs(void) {
     // Apply the default configuration
     deferred_notifications = 0;
 }
 
+/**
+ * @brief Execute one ADCS task processing cycle. 
+ *
+ * Handles the task pause/resume protocol and processes pending ADCS 
+ * task notifications.
+ */
 static void process_adcs(void) {
 
     uint32_t notificationValue = wait_for_notification();
@@ -77,7 +70,10 @@ static void process_adcs(void) {
 
 }
 
-
+/**
+ * @brief Execute detumbling mode.
+ * @todo Implement detumbling control logic.
+ */
 static void detumble(void) {
 
     // Don't exit function until finished 
@@ -85,19 +81,12 @@ static void detumble(void) {
 
 }
 
+/**
+ * @brief Execute nadir-pointing mode.
+ * @todo Implement nadir-pointing control logic.
+ */
 static void point_to_nadir(void) {
 
     // Don't exit function until finished 
-
-}
-
-static uint32_t wait_for_notification(void) {
-
-    uint32_t notificationValue = 0;
-    xTaskNotifyWait( 0,          // don’t clear on entry
-                    0xFFFFFFFF,  // clear all bits on exit
-                    &notificationValue,
-                    0 );
-    return notificationValue;
 
 }

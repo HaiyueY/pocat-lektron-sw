@@ -1,29 +1,13 @@
 /**
  * @file periph.c
  * @brief Peripheral handle definitions and initialization helpers.
+ * @details
+ * Defines the global STM32 HAL peripheral handles declared in periph.h and
+ * centralizes board peripheral initialization. The module initializes GPIO,
+ * TIM5, TIM2, SPI2, IWDG, USART2, RTC, and ADC1, and provides reconfiguration
+ * for peripherals whose timing depends on the selected system clock.
  * @author Guillermo O'Tuama Pascual
  * @date 2026-01-20
- *
- * Owns the global STM32 HAL peripheral handles and centralizes both the
- * initial peripheral bring-up path and the clock-dependent reconfiguration
- * used after runtime frequency switches.
- */
-
-
-// TODO
-/* @details This is the main module. It performs system initialization and starts the FreeRTOS scheduler. It:
- * - Initializes the HAL library
- * - Configures the system clock
- * - Initializes peripherals:
- *   - GPIO
- *   - TIM5 (used as a microsecond timebase)
- *       - provides micros() in stm32_radiolib_hal.cpp
- *   - TIM2 (used for tone generation in stm32_radiolib_hal.cpp)
- *       - will probably not be needed for SX1262
- *   - SPI1 (communication with SX1262)
- *   - USART2 (debug output)
- *   - IWDG (independent watchdog)
- * - It then finally creates the OBC task and starts the FreeRTOS scheduler.
  */
 
 #include "periph.h"
@@ -41,8 +25,6 @@ IWDG_HandleTypeDef hiwdg;
 RTC_HandleTypeDef hrtc;
 ADC_HandleTypeDef hadc1;
 
-/* ---- Private Helpers ---- */
-
 static uint32_t tim5_prescaler_for_freq(ClockFreq_t freq);
 static uint32_t spi2_prescaler_for_freq(ClockFreq_t freq);
 static uint32_t adc1_prescaler_for_freq(ClockFreq_t freq);
@@ -55,7 +37,6 @@ static void periph_usart2_init(void);
 static void periph_rtc_init(void);
 static void periph_adc1_init(ClockFreq_t freq);
 
-/* ---- Public API ---- */
 void periph_init_for_freq(ClockFreq_t freq)
 {
     periph_gpio_init();
@@ -94,8 +75,15 @@ void periph_reconfigure_for_freq(ClockFreq_t freq)
     }
 }
 
-/* ---- Private Helpers ---- */
-
+/**
+ * @brief Select the TIM5 prescaler for the configured system clock.
+ *
+ * TIM5 is used as a microsecond timebase, so the prescaler is chosen to keep
+ * the timer counter running at 1 MHz for each supported system clock.
+ *
+ * @param freq System clock selection.
+ * @return TIM5 prescaler value.
+ */
 static uint32_t tim5_prescaler_for_freq(ClockFreq_t freq)
 {
     switch (freq) {
@@ -106,6 +94,12 @@ static uint32_t tim5_prescaler_for_freq(ClockFreq_t freq)
     }
 }
 
+/**
+ * @brief Select the SPI2 baud-rate prescaler for the configured system clock.
+ *
+ * @param freq System clock selection.
+ * @return SPI2 baud-rate prescaler value.
+ */
 static uint32_t spi2_prescaler_for_freq(ClockFreq_t freq)
 {
     switch (freq) {
@@ -116,6 +110,12 @@ static uint32_t spi2_prescaler_for_freq(ClockFreq_t freq)
     }
 }
 
+/**
+ * @brief Select the ADC1 clock prescaler for the configured system clock.
+ *
+ * @param freq System clock selection.
+ * @return ADC1 clock prescaler value.
+ */
 static uint32_t adc1_prescaler_for_freq(ClockFreq_t freq)
 {
     switch (freq) {
@@ -126,10 +126,10 @@ static uint32_t adc1_prescaler_for_freq(ClockFreq_t freq)
     }
 }
 
-
 /**
   * @brief GPIO Initialization Function
-  * @todo Comment function implementation
+  * @details Enables the GPIO port clocks required by board peripherals.
+  * Radio control and interrupt pins are configured later by the RadioLib HAL.
   */
 static void periph_gpio_init(void)
 {
@@ -141,7 +141,6 @@ static void periph_gpio_init(void)
      configured by RadioLib through the HAL — do not touch them here. */
 }
 
-// QUITAAAAR AHHORA LO TENGO SOLO PARAAA PROBAR
 /**
   * @brief TIM2 Initialization Function
   * @details Configured for PWM generation, used for tone generation in stm32_radiolib_hal.cpp.
@@ -183,10 +182,10 @@ static void periph_tim2_init(void)
 
 /**
   * @brief TIM5 Initialization Function
-  * @details TIM5 is used as a microsecond timebase. 
-  * - TIM5 is clocked from APB1. With the APB1 prescaler set to 1 in SystemClock_Config(),
-  *   the timer input clock is 80 MHz.
-  * - TIM5 prescaler is set to 80-1, so timer ticks every 1 microsecond (80 MHz / 80 = 1 MHz).
+  * @details TIM5 is used as a microsecond timebase. The prescaler is selected
+  * from the current system clock configuration so the timer counter runs at
+  * 1 MHz for each supported clock frequency.
+  * @param freq Current system clock selection.
   */
 static void periph_tim5_init(ClockFreq_t freq)
 {
@@ -222,13 +221,13 @@ static void periph_tim5_init(ClockFreq_t freq)
 /**
 * @brief SPI2 Initialization Function
 * @details Initializes SPI2 as an SPI master (full-duplex) for communication with the SX1262.
-*  - 4-bit frames
+*  - 8-bit frames
 *  - Most significant bit (MSB) first
 *  - Clock polarity low, clock phase 1st edge (SPI mode 0)
-*  - Hardware NSS output (NSS managed by SPI peripheral)
-*  - NSS pulse mode enabled
-*  - Baud rate prescaler set to 2 (SPI clock = fPCLK / 2, where fPCLK is the APB1 clock)
-* @note Requires SPI2_NSS pin to be configured on the correct AF pin.
+*  - Software NSS management
+*  - NSS pulse mode disabled
+*  - Baud rate prescaler selected from the current system clock
+* @param freq Current system clock selection.
 */
 static void periph_spi2_init(ClockFreq_t freq)
 {
@@ -291,8 +290,10 @@ static void periph_usart2_init(void)
 
 /**
   * @brief RTC Initialization Function
-  * @param None
-  * @retval None
+  * @details Initializes the RTC in 24-hour mode and preserves the stored
+  * date/time across resets when the backup register flag is already set.
+  * If the flag is missing, default time/date fields are written and the backup
+  * flag is set.
   */
 static void periph_rtc_init(void)
 {
@@ -336,11 +337,15 @@ static void periph_rtc_init(void)
 
 /**
   * @brief ADC1 Initialization Function
-  * @details Configures ADC1 for reading the internal temperature sensor.
+  * @details Configures ADC1 for single software-triggered conversions used by
+  * the internal temperature-sensor readout. The ADC clock prescaler is selected
+  * from the current system clock configuration, and the channel is configured
+  * by the code that performs each conversion.
   * - 12-bit resolution
   * - Single conversion mode
   * - Software trigger
-  * - Internal temperature sensor channel (ADC_CHANNEL_TEMPSENSOR)
+  * - Calibration started in single-ended mode
+  * @param freq Current system clock selection.
   */
 static void periph_adc1_init(ClockFreq_t freq)
 {

@@ -1,13 +1,8 @@
 /**
  * @file task_management.c
- * @brief Task creation and reset management for OBC subsystem tasks.
- * @version 0.2
- * @date 2026-03-30
- *
- * @copyright Copyright (c) 2026
+ * @brief Implements task management functions such as creating, pausing, resuming, and resetting subsystem tasks.
  */
 
-/* ---- Includes ---- */
 #include "task_management.h"
 #include "obc.h"
 #include "FreeRTOS.h"
@@ -28,23 +23,26 @@
 
 #define TM_PAUSE_ACK_TIMEOUT_MS 10000u
 
-/* ---- Task table ---- */
-
-/*
- * Table is indexed directly by bit position: TM_TASK_X = (1u << idx).
- * Entry order MUST match the TM_TASK_* bit definitions in task_management.h.
+/**
+ * @brief Runtime metadata for one managed subsystem task.
  */
 typedef struct {
-    TaskHandle_t     handle;
-    TaskFunction_t   func;
-    const char      *name;
-    uint16_t         stack_size;
-    UBaseType_t      priority;
-    EventBits_t      health_bit;
-    EventBits_t      ack_bit;
-    bool             paused;
+    TaskHandle_t     handle;     /**< FreeRTOS task handle populated after task creation. */
+    TaskFunction_t   func;       /**< Task entry function passed to xTaskCreate(). */
+    const char      *name;       /**< Human-readable task name used by FreeRTOS and logs. */
+    uint16_t         stack_size; /**< Stack size passed to xTaskCreate(). */
+    UBaseType_t      priority;   /**< FreeRTOS task priority passed to xTaskCreate(). */
+    EventBits_t      health_bit; /**< Health-monitor bit expected from this task. */
+    EventBits_t      ack_bit;    /**< Event-group bit used to acknowledge pause/resume requests. */
+    bool             paused;     /**< Current pause state tracked by tm_check_pause(). */
 } TaskEntry_t;
 
+/**
+ * @brief Managed subsystem task table.
+ *
+ * Table entries are indexed directly by bit position: TM_TASK_X = (1u << idx).
+ * Entry order must match the TM_TASK_* bit definitions in task_management.h.
+ */
 static TaskEntry_t task_table[] = {
     /* idx 0 = TM_TASK_PAYLOAD     */ { NULL, payload_task,     "PAYLOAD",     PAYLOAD_STACK_SIZE,     PAYLOAD_PRIORITY,     HEALTH_BIT_PAYLOAD,     EV_PAYLOAD_ACK,     false },
     /* idx 1 = TM_TASK_EPS         */ { NULL, eps_task,         "EPS",         EPS_STACK_SIZE,         EPS_PRIORITY,         HEALTH_BIT_EPS,         EV_EPS_ACK,         false },
@@ -55,18 +53,17 @@ static TaskEntry_t task_table[] = {
     /* idx 6 = TM_TASK_BEACON      */ { NULL, beacon_task,      "BEACON",      BEACON_STACK_SIZE,      BEACON_PRIORITY,      HEALTH_BIT_BEACON,      EV_BEACON_ACK,      false },
 };
 
+/** @brief Number of entries in task_table. */
 #define TASK_TABLE_SIZE (sizeof(task_table) / sizeof(task_table[0]))
 
+/** @brief Event group used to collect pause/resume acknowledgements. */
 static EventGroupHandle_t task_event_group_handle = NULL;
-
-/* ---- Private helper prototypes ---- */
 
 static BaseType_t create_task_event_group(void);
 static BaseType_t create_single_task(uint32_t idx);
 static void notify_and_wait(uint32_t mask, uint32_t notif_bit);
 static inline uint32_t pop_lsb(uint32_t *mask);
 
-/* ---- Public function definitions ---- */
 
 BaseType_t tm_create_tasks(uint32_t running, uint32_t paused)
 {
@@ -172,9 +169,10 @@ TaskHandle_t tm_get_task_handle(uint32_t task_bit)
     return task_table[idx].handle;
 }
 
-
-/* ---- Private helpers ---- */
-
+/**
+ * @brief Create the task ACK event group if needed.
+ * @return pdPASS on success, pdFAIL if the event group could not be created.
+ */
 static BaseType_t create_task_event_group(void)
 {
     if (task_event_group_handle == NULL)
@@ -189,6 +187,15 @@ static BaseType_t create_task_event_group(void)
     return pdPASS;
 }
 
+/**
+ * @brief Create one subsystem task from task_table.
+ *
+ * Stores the created task handle, assigns the task table index as the FreeRTOS
+ * task number, and adds the task health bit to the expected health mask.
+ *
+ * @param idx Index in task_table identifying the task to create.
+ * @return The BaseType_t status returned by xTaskCreate().
+ */
 static BaseType_t create_single_task(uint32_t idx)
 {
     TaskEntry_t *entry = &task_table[idx];
@@ -203,6 +210,17 @@ static BaseType_t create_single_task(uint32_t idx)
     return ok;
 }
 
+/**
+ * @brief Send a task-control notification and wait for acknowledgements.
+ *
+ * Builds the expected ACK mask from active task handles, sends notif_bit to
+ * each selected task, and waits until all selected tasks acknowledge or the
+ * timeout expires.
+ *
+ * @param mask Bitwise OR of TM_TASK_* flags selecting target tasks.
+ * @param notif_bit Notification bit to send, typically N_TASK_PAUSE or
+ *                  N_TASK_RESUME.
+ */
 static void notify_and_wait(uint32_t mask, uint32_t notif_bit)
 {
     /* Build the ACK bitmask */
@@ -240,6 +258,12 @@ static void notify_and_wait(uint32_t mask, uint32_t notif_bit)
     }
 }
 
+/**
+ * @brief Remove and return the least-significant set bit index from a mask.
+ * @param mask Pointer to a nonzero bitmask. The least-significant set bit is
+ *             cleared before returning.
+ * @return Zero-based bit index removed from the mask.
+ */
 static inline uint32_t pop_lsb(uint32_t *mask)
 {
     uint32_t idx = __builtin_ctz(*mask);

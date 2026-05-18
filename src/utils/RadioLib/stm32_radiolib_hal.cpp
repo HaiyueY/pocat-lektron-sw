@@ -9,10 +9,6 @@
 #include "stm32_radiolib_hal.h"
 #include <string.h>
 
-// ============================================================================
-// Global/Static Definitions
-// ============================================================================
-
 /** @brief Forwarding of the HAL_GPIO_EXTI_Callback to our implementation. */
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     // Forward to our static method
@@ -20,12 +16,6 @@ extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 }
 
 void (*stm32RadioLibHal::_extiCallbacks[16])(void) = { nullptr };
-
-// The non-obvious decisions for the implementation are commented:
-
-// ============================================================================
-// Public Member Functions
-// ============================================================================
 
 /* 
  * Base GPIO STM32 configuration passed to RadioLibHal:

@@ -1,10 +1,12 @@
-/*
- * flash2.h
- *
- *  Created on: 17 ene. 2023
- *      Author: NilRi
- * 
- * * Modified on: 4 march 2026
+/**
+ * @file flash.h
+ * @brief Internal flash memory address map and access helpers.
+ * @details
+ * Defines the firmware flash address map and declares raw flash access helpers
+ * plus OBDH-mediated read/write request functions for task-safe access.
+ * @author Medir Segura
+ * @date 2023-01-17
+ * @note Modified on 2026-03-04.
  */
 
 #ifndef INC_FLASH_H_
@@ -110,11 +112,6 @@
 #define SURVIVAL_TH_ADDR            0x08030803  // 1
 
 #define RFI_CONFIG_ADDR             0x08031000  // 8
-
-
-
-
-
 
 
 

@@ -1,16 +1,20 @@
 /**
  * @file clock.c
  * @brief Dynamic system clock frequency switching for power management.
- *
- * Switches between 80 MHz (HSI+PLL), 8 MHz (MSI Range 7), and 2 MHz
- * (MSI Range 5) based on the requested frequency.
+ * @details
+ * Implements startup clock configuration and runtime switching between the
+ * supported system clock modes: 80 MHz using HSI+PLL, 8 MHz using MSI range 7,
+ * and 2 MHz using MSI range 5.
  */
 
 #include "clock.h"
 #include "stm32l4xx_hal.h"
 #include <stdio.h>
 
+/** @brief Current system clock frequency tracked by the clock module. */
 static ClockFreq_t current_freq = CLK_FREQ_80MHZ;
+
+/** @brief Whether the clock module has completed initial clock configuration. */
 static bool clock_initialized = false;
 
 static bool systemclock_config_for_freq(ClockFreq_t target);
@@ -73,6 +77,15 @@ ClockFreq_t clock_get_current(void)
     return current_freq;
 }
 
+/**
+ * @brief Configure the system clock for the requested frequency.
+ *
+ * Selects the HSI+PLL configuration for 80 MHz, or the appropriate MSI range
+ * and flash latency for lower-frequency operation.
+ *
+ * @param target Target system clock frequency.
+ * @return true on success, false if a HAL clock configuration call failed.
+ */
 static bool systemclock_config_for_freq(ClockFreq_t target)
 {
     if (target == CLK_FREQ_80MHZ) {
@@ -84,6 +97,15 @@ static bool systemclock_config_for_freq(ClockFreq_t target)
     return systemclock_config_msi(msi_range, latency);
 }
 
+/**
+ * @brief Switch the running system clock to the 80 MHz HSI+PLL configuration.
+ *
+ * Exits low-power run mode if needed, raises the regulator voltage scale,
+ * enables HSI and the PLL, switches SYSCLK to the PLL output, and then disables
+ * MSI to reduce power consumption.
+ *
+ * @return true on success, false if any required HAL operation failed.
+ */
 static bool switch_to_hsi(void)
 {
     // Step 1: Exit Low-Power Run mode if active (required before raising voltage/frequency)
@@ -136,6 +158,17 @@ static bool switch_to_hsi(void)
     return true;
 }
 
+/**
+ * @brief Switch the running system clock to an MSI-based configuration.
+ *
+ * Enables MSI at the requested range, switches SYSCLK to MSI, disables the
+ * HSI/PLL clock path, lowers the regulator voltage scale, and enters
+ * low-power run mode when the 2 MHz MSI range is selected.
+ *
+ * @param msi_range STM32 HAL MSI range value for the target clock.
+ * @param flash_latency Flash latency required for the target clock.
+ * @return true on success, false if any required HAL operation failed.
+ */
 static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
 {
     // Step 1: Exit Low-Power Run mode if active (e.g. switching from 2 MHz to 8 MHz)
@@ -168,6 +201,8 @@ static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
         return false;
     }
 
+    /** @todo Confirm whether PLL must be disabled before HSI instead of
+     *        disabling both in the same HAL_RCC_OscConfig() call. */
     // Disable PLL and HSI at the same time with HAL_RCC_OscConfig. PLL might have to be disabled before HSI but we'll leave it like this for now
     RCC_OscInitTypeDef pll_off = {0};
     pll_off.OscillatorType = RCC_OSCILLATORTYPE_HSI;
@@ -189,7 +224,15 @@ static bool switch_to_msi(uint32_t msi_range, uint32_t flash_latency)
     return true;
 }
 
-// only called after restarting satellite
+/**
+ * @brief Configure the startup system clock to the 80 MHz HSI+PLL path.
+ *
+ * Sets regulator voltage scale 1, enables HSI and LSI, configures the PLL from
+ * HSI, and selects the PLL output as SYSCLK.
+ * Only should be called once at startup.
+ *
+ * @return true on success, false if any required HAL operation failed.
+ */
 static bool systemclock_config_hsi(void)
 {
     RCC_OscInitTypeDef osc = {0};
@@ -229,7 +272,17 @@ static bool systemclock_config_hsi(void)
     return true;
 }
 
-// only called after restarting satellite
+/**
+ * @brief Configure the startup system clock to an MSI-based path.
+ *
+ * Sets regulator voltage scale 2, enables LSI and MSI at the requested range,
+ * selects MSI as SYSCLK, and enters low-power run mode when the 2 MHz MSI range
+ * is selected. Only should be called once at startup.
+ *
+ * @param msi_range STM32 HAL MSI range value for the target clock.
+ * @param flash_latency Flash latency required for the target clock.
+ * @return true on success, false if any required HAL operation failed.
+ */
 static bool systemclock_config_msi(uint32_t msi_range, uint32_t flash_latency)
 {
     RCC_OscInitTypeDef osc = {0};

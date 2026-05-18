@@ -70,3 +70,10 @@
 
 #define N_PAYLOAD_ACTIVATE               (1u << 0)  /**< Activate the payload */
 #define N_PAYLOAD_DEACTIVATE             (1u << 1)  /**< Deactivate the payload */
+
+
+/**
+ * @brief Reads pending task notifications.
+ * @return Notification bitmask received by the task.
+ */
+uint32_t wait_for_notification(void);

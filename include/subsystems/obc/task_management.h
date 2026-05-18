@@ -1,10 +1,6 @@
 /**
  * @file task_management.h
- * @brief Task creation and reset management for OBC subsystem tasks.
- * @version 0.1
- * @date 2026-03-30
- *
- * @copyright Copyright (c) 2026
+ * @brief Task management for subsystem tasks.
  */
 
 #ifndef INC_TASK_MANAGEMENT_H_
