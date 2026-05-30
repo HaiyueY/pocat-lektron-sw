@@ -52,31 +52,31 @@ int save_ht_to_circular_storage(CircularFlashHandler *ch)
     //Falta implementar
 
     //adreça a escriure
-    HAL_StatusTypeDef status= OBDH_Write_Request();//escrivim el bloc comprimit
-    if (status==HAL_OK)
-    {
-        ch.writing_pointer=(ch.writing_pointer+1)%OBDH_MAX_HT12_MESSAGES;
-        if(ch.current_ht_count<OBDH_MAX_HT12_MESSAGES)
-        {
-            ch.current_ht_count++;
-        }
-        obdh_save_pointers_flash();
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
+    // HAL_StatusTypeDef status= OBDH_Write_Request();//escrivim el bloc comprimit
+    // if (status==HAL_OK)
+    // {
+    //     ch.writing_pointer=(ch.writing_pointer+1)%OBDH_MAX_HT12_MESSAGES;
+    //     if(ch.current_ht_count<OBDH_MAX_HT12_MESSAGES)
+    //     {
+    //         ch.current_ht_count++;
+    //     }
+    //     obdh_save_pointers_flash();
+    //     return 0;
+    // }
+    // else
+    // {
+    //     return -1;
+    // }
 }
 
 void fill_ht_from_it(CircularFlashHandler *ch, uint8_t *it)
 {
     //copiem beacon que ha arribat de it
     //* falta implementar
-    temporal_count++;
-    if(temporal_count>=POCKET_PLUS_PERIOD)
-    {
-        save_ht_to_circular_storage(ch);
-        temporal_count=0;
-    }
+    // temporal_count++;
+    // if(temporal_count>=POCKET_PLUS_PERIOD)
+    // {
+    //     save_ht_to_circular_storage(ch);
+    //     temporal_count=0;
+    // }
 }
