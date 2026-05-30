@@ -13,6 +13,16 @@
 #include "FreeRTOS.h"
 #include "queue.h"
 #include "task.h"
+#include "ht_handling.h"
+
+
+
+#define OBDH_TELEMETRY_PERIOD_MS 10000 //To be defined
+#define MAX_HT_BEACONS 10 //Arbitrary for testing, to be discussed
+#define HT_BEACON_SIZE 16 // following PoCat TM_TC DATABASE, this might change
+#define HT_BASE_ADDR 0x080FE000 //To be defined
+#define HT_POINTER_ADDR 0x080FD000
+
 
 /**
  * @brief Flash operation type.
@@ -43,11 +53,15 @@ typedef struct {
 
 /** @brief Queue used to send flash access requests to the OBDH task. */
 extern QueueHandle_t obdh_queue_handle;
+extern CircularFlashHandler telemetry_handler;
 
 /**
  * @brief OBDH FreeRTOS task entry point.
  * @param pv_parameters Task parameter provided by xTaskCreate(); currently unused.
  */
 void obdh_task(void *pv_parameters);
+void obdh_save_pointers_flash(void);
+HAL_StatusTypeDef obdh_get_telemetry(uint8_t *buffer);
+HAL_StatusTypeDef obdh_insert_telemetry(uint8_t *buffer);
 
 #endif /* INC_OBDH_H_ */
