@@ -22,13 +22,12 @@
 
 //Potser falta per definir mida block a la flash que ocupara
 
-typedef struct __attribute__ ((__packed__)) CircularFileHandler {
+typedef struct __attribute__ ((__packed__)) {
     int current_ht_count;
     int reading_pointer;
     int writing_pointer;
     int flag;
-}CircularFlashHandler;
-
+} CircularFlashHandler;
 
 /**
  * @brief Take an instant telemetry (IT), accomulate it at RAN and if it reaches POCKET_PLUS_PERIOD it is stored
@@ -40,3 +39,5 @@ typedef struct __attribute__ ((__packed__)) CircularFileHandler {
 void fill_ht_from_it(CircularFlashHandler *ch, uint8_t *it);
 
 int save_ht_to_circular_storage(CircularFlashHandler *ch);
+
+#endif /* __HT_HANDLING_H__ */

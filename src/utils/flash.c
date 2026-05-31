@@ -28,106 +28,131 @@
 
 extern QueueHandle_t obdh_queue_handle;
 
-
-static uint32_t Get_Page(uint32_t Addr)
+/**
+  * @brief  Gets the page of a given address
+  * @param  Addr: Address of the FLASH Memory
+  * @retval The page of a given address
+  */
+static uint32_t GetPage(uint32_t Addr)
 {
   uint32_t page = 0;
-
-  if (Addr <(FLASH_BASE + FLASH_BANK_SIZE))
+  
+  if (Addr < (FLASH_BASE + FLASH_BANK_SIZE))
   {
-   /* Bank 1 */
-    page = (Addr-FLASH_BASE)/FLASH_PAGE_SIZE;
+    /* Bank 1 */
+    page = (Addr - FLASH_BASE) / FLASH_PAGE_SIZE;
   }
   else
   {
-   /* Bank 2 */
-    page = (Addr-(FLASH_BASE + FLASH_BANK_SIZE))/FLASH_PAGE_SIZE;
+    /* Bank 2 */
+    page = (Addr - (FLASH_BASE + FLASH_BANK_SIZE)) / FLASH_PAGE_SIZE;
   }
-
+  
   return page;
 }
 
-static uint32_t Get_Bank(uint32_t Addr)
+
+/**
+  * @brief  Gets the bank of a given address
+  * @details Takes Flash bank swapping into account. This is kept for now to
+  *          make the implementation compatible with a possible future dual-boot
+  *          configuration.
+  * @param  Addr: Address of the FLASH Memory
+  * @retval The bank of a given address
+  */
+static uint32_t GetBank(uint32_t Addr)
 {
-	if (Addr < (FLASH_BASE + FLASH_BANK_SIZE))
+  uint32_t bank = 0;
+  
+  if (READ_BIT(SYSCFG->MEMRMP, SYSCFG_MEMRMP_FB_MODE) == 0)
+  {
+  	/* No Bank swap */
+    if (Addr < (FLASH_BASE + FLASH_BANK_SIZE))
     {
-        return FLASH_BANK_1;
+      bank = FLASH_BANK_1;
     }
     else
     {
-        return FLASH_BANK_2;
+      bank = FLASH_BANK_2;
     }
+  }
+  else
+  {
+  	/* Bank swap */
+    if (Addr < (FLASH_BASE + FLASH_BANK_SIZE))
+    {
+      bank = FLASH_BANK_2;
+    }
+    else
+    {
+      bank = FLASH_BANK_1;
+    }
+  }
+  
+  return bank;
 }
 
+
+
 void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes) {
-	static FLASH_EraseInitTypeDef EraseInitStruct={0};
-	uint32_t PAGEError;
-	static uint64_t  dataSave[2048];
+	
+    static uint8_t  dataSave[FLASH_PAGE_SIZE];
 
-	HAL_FLASH_Unlock(); // Unlock the Flash to enable the flash control register access
+	  HAL_FLASH_Unlock(); // Unlock the Flash to enable the flash control register access
 
-	uint32_t StartPage = Get_Page(data_addr);
-	//uint32_t EndPageAdress = data_addr + n_bytes;
-	//uint32_t EndPage = Get_Page(EndPageAdress);
-	uint32_t n_pages = 1; //we directly assigned to 1 because we don't want to use more than 16KB
+    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS); // Clear error flags from previous operations. We assume that they have been handled already
 
-	/******SAVE THE DATA STORED IN THE PAGE (THAT WILL BE ERASED) & THE NEW DATA IN AN ARRAY******/
-	uint32_t first_page_addr, addr, n_addr;
-    
-    
-    if (Get_Bank(data_addr) == FLASH_BANK_1) {
-        first_page_addr = (StartPage * FLASH_PAGE_SIZE) + FLASH_BASE;
-    } else {
-        first_page_addr = (StartPage * FLASH_PAGE_SIZE) + FLASH_BASE + FLASH_BANK_SIZE;
+    if (n_bytes == 0) {
+        return;
     }
 
-    addr = first_page_addr;
-      
-    n_addr = FLASH_PAGE_SIZE; //2048
-   
+    /* Read-modify-write one page at a time, so only a single FLASH_PAGE_SIZE
+       RAM buffer is needed no matter how many pages the write spans. */
+    uint32_t write_start = data_addr;
+    uint32_t write_end   = data_addr + n_bytes; // exclusive end of the write
 
-    unsigned long long i = 0, j = 0;
+    for (uint32_t page_addr = write_start & ~(FLASH_PAGE_SIZE - 1);
+         page_addr < write_end;
+         page_addr += FLASH_PAGE_SIZE) {
 
-    while(i < n_addr){
-        if (addr == data_addr && j < n_bytes){ 
-            // Save data we want to write
-            while(j < n_bytes){
-                dataSave[i] = data[j];
-                i++; j++; addr++;
-            }
-        }else{
-            // Save past data
-            dataSave[i] = *(__IO uint8_t*)addr;
-            i++; addr++;
+        uint32_t page_end = page_addr + FLASH_PAGE_SIZE;
+
+        /* Portion of this page covered by the new data */
+        uint32_t chunk_start = (write_start > page_addr) ? write_start : page_addr;
+        uint32_t chunk_end   = (write_end   < page_end)  ? write_end   : page_end;
+        uint32_t page_offset = chunk_start - page_addr;   // where in the page
+        uint32_t data_offset = chunk_start - write_start; // where in the source
+        uint32_t chunk_len   = chunk_end - chunk_start;
+
+        /* Preserve the existing page contents, then overlay the new bytes */
+        memcpy(dataSave, (const void *)page_addr, FLASH_PAGE_SIZE);
+        memcpy(dataSave + page_offset, data + data_offset, chunk_len);
+
+        /* Erase this page (bank/page resolved per page in case of bank crossing) */
+        FLASH_EraseInitTypeDef EraseInitStruct = {
+            .TypeErase = FLASH_TYPEERASE_PAGES,
+            .Banks     = GetBank(page_addr),
+            .Page      = GetPage(page_addr),
+            .NbPages   = 1,
+        };
+
+        uint32_t PAGEError;
+        if (HAL_FLASHEx_Erase(&EraseInitStruct, &PAGEError) != HAL_OK)
+        {
+            HAL_FLASH_Lock();
+            printf("Error erasing flash page at address 0x%08lX, error code %lu\n", (unsigned long)page_addr, (unsigned long)PAGEError);
+            return;
         }
-    }
 
-	/******ERASE THE PAGE WHERE THE ADDR DATA IS CONTAINED******/
-
-      EraseInitStruct.Banks = Get_Bank(data_addr);       
-      EraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES; 
-      EraseInitStruct.Page = StartPage;                  
-      EraseInitStruct.NbPages = n_pages;                 
-
-      while(HAL_FLASHEx_Erase(&EraseInitStruct, &PAGEError) != HAL_OK); 
-
-    /******WRITE THE WHOLE PAGE IN DOUBLEWORDS FORM WITH THE NEW DATA******/
-    uint64_t doubleWord;
-    addr = first_page_addr;
-    i = 0;
-
-    while (i < n_addr) {
-
-        doubleWord = ((dataSave[i]) |(dataSave[i+1] << 8) | (dataSave[i+2]) << 16 |(dataSave[i+3] << 24)|
-                      (dataSave[i+4] << 32) | (dataSave[i+5] << 40) | (dataSave[i+6] << 48) | (dataSave[i+7] << 56));
-
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, addr, doubleWord) == HAL_OK) {
-            addr+=8;
-            i+=8;;
-        } else {
-            
-            break; 
-            
+        /* Write the page back, one doubleword at a time */
+        for (uint32_t i = 0; i < FLASH_PAGE_SIZE; i += 8) {
+            uint64_t doubleWord;
+            memcpy(&doubleWord, dataSave + i, sizeof(doubleWord));
+            if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, page_addr + i, doubleWord) != HAL_OK) {
+                HAL_FLASH_Lock();
+                printf("Error programming flash at address 0x%08lX, error code %lu\n", (unsigned long)(page_addr + i), (unsigned long)HAL_FLASH_GetError());
+                return;
+            }
         }
     }
 
@@ -135,19 +160,8 @@ void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes) {
 
 }
 
-void Read_Flash(uint32_t data_addr, uint8_t *RxBuf,
-		uint16_t n_bytes) {
-
-	//xSemaphoreTake(xMutex,portMAX_DELAY);
-	while (1) {
-		*RxBuf = *(__IO uint8_t*) data_addr;
-		data_addr += 1;
-		RxBuf++;
-		n_bytes--;
-		if (n_bytes == 0)
-			break;
-	}
-	//xSemaphoreGive(xMutex);
+void Read_Flash(uint32_t data_addr, uint8_t *RxBuf, uint16_t n_bytes) {
+    memcpy(RxBuf, (const void *)data_addr, n_bytes);
 }
 
 HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size_t len)

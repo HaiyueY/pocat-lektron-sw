@@ -120,7 +120,29 @@ extern EventGroupHandle_t xEventGroup;
 extern QueueHandle_t FLASH_Queue;
 extern SemaphoreHandle_t xMutex;
 
+/**
+  * @brief  Writes a byte buffer to internal flash, spanning multiple pages if needed.
+  * @details Each flash page touched by the destination range is read into RAM,
+  *          updated with the new bytes, erased, then programmed back one
+  *          doubleword at a time, using a single page-sized RAM buffer.
+  * @param  data_addr: Destination start address in flash.
+  * @param  data: Pointer to the source buffer.
+  * @param  n_bytes: Number of bytes to write.
+  * @todo   Consider FLASH_TYPEPROGRAM_FAST (256-byte row programming) in the future.
+  * @todo   This was implemented to support multi-page writes; if that turns out
+  *         not to be necessary, the function can be simplified back to a single page.
+  */
 void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes);
+
+/**
+  * @brief  Reads a block of bytes from internal flash into a RAM buffer.
+  * @details Internal flash is memory-mapped, so the read is a plain copy.
+  *          Access is serialized through the OBDH queue at runtime; the
+  *          remaining direct callers run at boot/setup with no contention.
+  * @param  data_addr: Source start address in flash.
+  * @param  RxBuf: Destination buffer (must hold at least n_bytes).
+  * @param  n_bytes: Number of bytes to read.
+  */
 void Read_Flash(uint32_t data_addr, uint8_t *RxBuf, uint16_t n_bytes);
 
 /**
@@ -133,6 +155,7 @@ void Read_Flash(uint32_t data_addr, uint8_t *RxBuf, uint16_t n_bytes);
  * has happened)
  */
 HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size_t length);
+
 /**
  * @brief This function allows any task to perform a reading on the flash
  * 
