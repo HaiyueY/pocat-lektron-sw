@@ -156,12 +156,12 @@ void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes) {
         }
     }
 
-    HAL_FLASH_Lock();// Lock the Flash to disable the flash control register access (protectagainst unwanted operation).
+    HAL_FLASH_Lock(); // Lock the Flash to disable the flash control register access (protectagainst unwanted operation).
 
 }
 
-void Read_Flash(uint32_t data_addr, uint8_t *RxBuf, uint16_t n_bytes) {
-    memcpy(RxBuf, (const void *)data_addr, n_bytes);
+void Read_Flash(uint32_t data_addr, uint8_t *data, uint16_t n_bytes) {
+    memcpy(data, (const void *)data_addr, n_bytes);
 }
 
 HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size_t len)

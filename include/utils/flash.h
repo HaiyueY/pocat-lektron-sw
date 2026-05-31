@@ -131,6 +131,7 @@ extern SemaphoreHandle_t xMutex;
   * @todo   Consider FLASH_TYPEPROGRAM_FAST (256-byte row programming) in the future.
   * @todo   This was implemented to support multi-page writes; if that turns out
   *         not to be necessary, the function can be simplified back to a single page.
+  * @todo   Review __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
   */
 void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes);
 
@@ -140,10 +141,10 @@ void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes);
   *          Access is serialized through the OBDH queue at runtime; the
   *          remaining direct callers run at boot/setup with no contention.
   * @param  data_addr: Source start address in flash.
-  * @param  RxBuf: Destination buffer (must hold at least n_bytes).
+  * @param  data: Destination buffer (must hold at least n_bytes).
   * @param  n_bytes: Number of bytes to read.
   */
-void Read_Flash(uint32_t data_addr, uint8_t *RxBuf, uint16_t n_bytes);
+void Read_Flash(uint32_t data_addr, uint8_t *data, uint16_t n_bytes);
 
 /**
  * @brief This functions allows any task at any moment to perform a writing on the flash

@@ -88,11 +88,11 @@ static void setup_obdh(void) {
     Read_Flash(HT_POINTER_ADDR, (uint8_t*)&telemetry_handler, sizeof(CircularFlashHandler));
     if(telemetry_handler.flag==telemetry_circular_flag)
     {
-        printf("telemetria circular creada\n");
+        printf("Telemetria circular creada\n");
     }
     else    
     {
-        printf("telemetria circular no creada\n");
+        printf("Telemetria circular no creada\n");
         telemetry_handler.flag=telemetry_circular_flag;
         telemetry_handler.current_ht_count=0;
         telemetry_handler.reading_pointer=0;
