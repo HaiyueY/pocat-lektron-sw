@@ -33,7 +33,7 @@ extern QueueHandle_t obdh_queue_handle;
   * @param  Addr: Address of the FLASH Memory
   * @retval The page of a given address
   */
-static uint32_t GetPage(uint32_t Addr)
+static uint32_t get_page(uint32_t Addr)
 {
   uint32_t page = 0;
   
@@ -60,7 +60,7 @@ static uint32_t GetPage(uint32_t Addr)
   * @param  Addr: Address of the FLASH Memory
   * @retval The bank of a given address
   */
-static uint32_t GetBank(uint32_t Addr)
+static uint32_t get_bank(uint32_t Addr)
 {
   uint32_t bank = 0;
   
@@ -131,8 +131,8 @@ void Write_Flash(uint32_t data_addr, const uint8_t *data, uint16_t n_bytes) {
         /* Erase this page (bank/page resolved per page in case of bank crossing) */
         FLASH_EraseInitTypeDef EraseInitStruct = {
             .TypeErase = FLASH_TYPEERASE_PAGES,
-            .Banks     = GetBank(page_addr),
-            .Page      = GetPage(page_addr),
+            .Banks     = get_bank(page_addr),
+            .Page      = get_page(page_addr),
             .NbPages   = 1,
         };
 

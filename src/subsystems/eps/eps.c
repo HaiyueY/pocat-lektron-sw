@@ -30,7 +30,6 @@ void eps_task(void *pv_parameters)
     for (;;) {
         process_eps();
         health_kick(HEALTH_BIT_EPS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
 }
@@ -53,7 +52,7 @@ static void setup_eps(void)
  */
 static void process_eps(void)
 {
-    uint32_t notifications = wait_for_notification();
+    uint32_t notifications = wait_for_notification(pdMS_TO_TICKS(1000));
 
     if (tm_check_pause(notifications, &deferred_notifications))
         return;

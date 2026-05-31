@@ -25,7 +25,6 @@ void payload_task(void *pv_parameters) {
     for (;;) {
         process_payload();
         health_kick(HEALTH_BIT_PAYLOAD);
-        vTaskDelay(pdMS_TO_TICKS(1000));
     }
     
 }
@@ -49,7 +48,7 @@ static void setup_payload(void) {
  */
 static void process_payload(void) {
 
-    uint32_t notificationValue = wait_for_notification();
+    uint32_t notificationValue = wait_for_notification(pdMS_TO_TICKS(1000));
 
     if (tm_check_pause(notificationValue, &deferred_notifications))
         return;

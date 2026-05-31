@@ -45,7 +45,6 @@ void obc_task(void *pv_parameters) {
        {
            tm_handle_health_faults(faults);
        }
-       vTaskDelay(pdMS_TO_TICKS(2000)); // Delay to prevent busy looping, adjust as needed  
     }
 
 }
@@ -92,7 +91,7 @@ static void setup_obc(ObcState_t currentState) {
 static void process_obc(ObcState_t *currentState) {
 
     // Process notifications:
-    uint32_t notificationValue = wait_for_notification();
+    uint32_t notificationValue = wait_for_notification(pdMS_TO_TICKS(2000));
 
     if (notificationValue == N_OBC_EXIT_STATE_GROUP_MASK) {
         // Notification to change state, but we will check the exact state in the state machine function

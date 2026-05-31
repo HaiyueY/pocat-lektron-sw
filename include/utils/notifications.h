@@ -13,6 +13,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "FreeRTOS.h"   /* for TickType_t */
 
 /* ── General Task Notifications ─────────────────────────────────────────── */
 #define N_FLASH_OPERATION_COMPLETE         (1u << 31)  /**< Flash operation completed (success or failure) */
@@ -73,7 +74,14 @@
 
 
 /**
- * @brief Reads pending task notifications.
- * @return Notification bitmask received by the task.
+ * @brief Wait for pending task notifications, blocking up to a timeout.
+ *
+ * Wraps xTaskNotifyWait(): clears nothing on entry, clears all bits on exit,
+ * and blocks for up to @p timeout ticks. The notification value is always
+ * fully drained, so a return value of 0 means no notification arrived.
+ *
+ * @param timeout Maximum time to block, in ticks.
+ *                Pass 0 for a non-blocking poll.
+ * @return Notification bitmask received by the task (0 if none).
  */
-uint32_t wait_for_notification(void);
+uint32_t wait_for_notification(TickType_t timeout);

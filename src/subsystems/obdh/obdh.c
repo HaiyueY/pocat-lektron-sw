@@ -114,7 +114,8 @@ static void setup_obdh(void) {
 static void process_obdh(void) {
 
     uint32_t notifications = 0;
-    notifications = wait_for_notification();
+    // Non-blocking poll: OBDH paces on its request queue (xQueueReceive) below.
+    notifications = wait_for_notification(0);
 
     if (tm_check_pause(notifications, &deferred_notifications))
         return;

@@ -32,7 +32,6 @@ void adcs_task(void *pv_parameters) {
     for (;;) {
         process_adcs();
         health_kick(HEALTH_BIT_ADCS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -52,7 +51,7 @@ static void setup_adcs(void) {
  */
 static void process_adcs(void) {
 
-    uint32_t notificationValue = wait_for_notification();
+    uint32_t notificationValue = wait_for_notification(pdMS_TO_TICKS(1000));
 
     if (tm_check_pause(notificationValue, &deferred_notifications))
         return;
