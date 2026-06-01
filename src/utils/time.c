@@ -14,7 +14,12 @@
 #include "time.h"
 #include "periph.h"
 #include "stm32l4xx_hal.h"
+#include "FreeRTOS.h"
+#include "semphr.h"
 #include <stdio.h>
+
+/** @brief Mutex protecting RTC hardware access. */
+static SemaphoreHandle_t time_mutex = NULL;
 
 /** @brief Days from Jan 1 to the 1st of each month (non-leap year). */
 static const uint16_t days_before_month[12] = {
@@ -32,6 +37,15 @@ static const uint16_t days_before_month[12] = {
 
 /** @brief Unix timestamp at 2000-01-01 00:00:00 UTC. */
 #define EPOCH_2000    946684800UL
+
+/**
+ * @brief Initialize time module (creates mutex for RTC access).
+ */
+void time_init(void)
+{
+    time_mutex = xSemaphoreCreateMutex();
+    configASSERT(time_mutex);
+}
 
 /**
  * @brief Return 1 if @p year is a leap year, 0 otherwise.
@@ -117,18 +131,31 @@ uint32_t time_get_unix(void)
     RTC_TimeTypeDef t;
     RTC_DateTypeDef d;
 
+    if (time_mutex != NULL && xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+        xSemaphoreTake(time_mutex, portMAX_DELAY);
+    }
+
     /* HAL requires reading time first, then date (latches shadow regs). */
     HAL_RTC_GetTime(&hrtc, &t, RTC_FORMAT_BIN);
     HAL_RTC_GetDate(&hrtc, &d, RTC_FORMAT_BIN);
 
     uint16_t year = 2000 + d.Year;
+    uint32_t result = EPOCH_2000 + calendar_to_secs2000(year, d.Month, d.Date,
+                                                        t.Hours, t.Minutes, t.Seconds);
 
-    return EPOCH_2000 + calendar_to_secs2000(year, d.Month, d.Date,
-                                             t.Hours, t.Minutes, t.Seconds);
+    if (time_mutex != NULL && xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+        xSemaphoreGive(time_mutex);
+    }
+
+    return result;
 }
 
 void time_set_unix(uint32_t epoch)
 {
+    if (time_mutex != NULL && xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+        xSemaphoreTake(time_mutex, portMAX_DELAY);
+    }
+
     uint32_t secs2000 = epoch - EPOCH_2000;
 
     uint16_t year;
@@ -148,6 +175,10 @@ void time_set_unix(uint32_t epoch)
     d.Month = month;
     d.Date  = day;
     HAL_RTC_SetDate(&hrtc, &d, RTC_FORMAT_BIN);
+
+    if (time_mutex != NULL && xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+        xSemaphoreGive(time_mutex);
+    }
 }
 
 void time_print_epoch(uint32_t epoch)

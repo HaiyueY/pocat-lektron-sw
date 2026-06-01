@@ -11,6 +11,12 @@
 #include <stdint.h>
 
 /**
+ * @brief Initialize the time module (creates RTC mutex).
+ * @details Must be called before any other time_* functions.
+ */
+void time_init(void);
+
+/**
  * @brief Get the current Unix timestamp from the RTC.
  * @return Seconds since 1970-01-01 00:00:00 UTC.
  */
