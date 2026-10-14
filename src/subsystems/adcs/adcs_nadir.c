@@ -3,25 +3,26 @@
  * @brief Nadir pointing controller using magnetic control law.
  *
  * Algorithm overview:
- *   1. Run TRIAD attitude determination to estimate q_eci_body
- *   2. Compute 2-DOF target quaternion: q_target = U2Q(zenith_eci, body_z)
+ *   1. Estimate q_eci_body: TRIAD + gyro bias estimation when sunlit,
+ *      bias-corrected gyro propagation + magnetometer correction in eclipse
+ *   2. Compute the yaw-invariant 2-DOF reduced-attitude error:
+ *        nadir_body = R(q_est) · n̂_eci
+ *        ε = ẑ_body × nadir_body
  *      Magnetic actuation is rank-2 (torque is always ⊥ B), so only two
  *      attitude DOF can be controlled at any instant; yaw about the
  *      Earth-pointing axis is uncontrollable and must be left free.
+ *      ε has no yaw component by construction.
  *      Reference: Nadir_pointing.m L152.
- *   3. Compute error quaternion: q_err = q_target ⊗ conj(q_est)
- *   4. Enforce positive scalar part of q_err
- *   5. Extract ε (vector part of error quaternion)
- *   6. Compute orbit-rate-compensated body angular velocity:
+ *   3. Compute orbit-rate-compensated body angular velocity:
  *        ω_orbit_eci = (r × v) / |r|²
  *        ω̃ = ω_gyro − bias_est − R(q_est) · ω_orbit_eci
  *      so the rate-damping term drives ω toward the LVLH orbit rate
  *      (≈ 0.063 °/s) instead of zero, eliminating the orbit-period
  *      limit cycle caused by D-term fighting against the rotation
  *      needed to track the (rotating) Earth-pointing direction.
- *   7. Compute moment:
+ *      Then compute the moment:
  *        m = ( kP · (B_body × ε) − kR · (B_body × ω̃) ) / ||B_body||
- *   8. Clamp dipole and quantize intensity via mtq_compute_command()
+ *   4. Clamp dipole and quantize intensity via mtq_compute_command()
  *
  * Improvement over the MATLAB reference (`Nadir_pointing.m`):
  *   MATLAB damps ω toward zero in body/ECI frame (no orbit-rate
@@ -190,14 +191,12 @@ void nadir_step(adcs_state_t *state)
                                      NADIR_BODY_AXIS_Z);
     vec3d_t epsilon = vec3d_cross(body_z_axis, nadir_body);
 
-    /* Step 6: Magnetic control law with orbit-rate-compensated damping.
+    /* Step 3: Magnetic control law with orbit-rate-compensated damping.
      *   m = ( +kP·B×ε − kR·B×ω̃ ) / |B|
      *
-     * Sign convention: with the 2-DOF zenith-referenced target above and
-     * the codebase's quaternion conventions, the τ = m×B torque produced
-     * by +kP drives body_z toward the OPPOSITE of zenith, i.e. toward
-     * nadir.  This is the same form as the MATLAB reference
-     * (Nadir_pointing.m L180).
+     * Sign convention: with ε = ẑ_body × nadir_body from Step 2, the
+     * τ = m×B torque produced by +kP drives body_z toward nadir.  This
+     * is the same form as the MATLAB reference (Nadir_pointing.m L180).
      *
      * ω̃ = ω_gyro − bias_est − R(q_est)·ω_orbit_eci removes the orbit-
      * period limit cycle: the body must rotate at ~0.063 °/s to keep
@@ -238,7 +237,7 @@ void nadir_step(adcs_state_t *state)
     desired_dipole.y = (NADIR_KP * b_cross_eps.y - NADIR_KR * b_cross_omega.y) / b_norm;
     desired_dipole.z = (NADIR_KP * b_cross_eps.z - NADIR_KR * b_cross_omega.z) / b_norm;
 
-    /* Step 7: Clamp and quantize via MTQ driver */
+    /* Step 4: Clamp and quantize via MTQ driver */
     mtq_compute_command(desired_dipole, &state->mtq_cmd);
 
     state->step_count++;

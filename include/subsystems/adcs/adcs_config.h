@@ -74,7 +74,9 @@ extern "C" {
 #define MTQ_COIL_FACTOR_Z   0.106306  /**< 15.946e-3 / 0.150 = Sz×2 [turns·m²] */
 
 /** Driver current limits [mA]
- *  Source: docs/Max_mag_moment_calc.m → IomA = 150 mA */
+ *  Source: docs/Max_mag_moment_calc.m → IomA = 150 mA
+ *  TBC in S2: these values predate the PQ_ADCS_HBridge board (4× DRV8214);
+ *  re-derive range and step from the DRV8214 current regulation. */
 #define MTQ_MIN_INTENSITY_MA    0.5
 #define MTQ_MAX_INTENSITY_MA    150.0
 #define MTQ_INTENSITY_STEP_MA   0.5

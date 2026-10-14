@@ -3,8 +3,10 @@
  * @brief Magnetorquer driver abstraction layer.
  *
  * Handles dipole-to-intensity conversion, intensity quantization
- * matching the BD2606MVV driver constraints (0.5-32 mA, 0.5 mA step),
- * and dipole clamping to hardware limits.
+ * (step and limits from MTQ_*_INTENSITY_MA in adcs_config.h), and dipole
+ * clamping to hardware limits. The quantization was modelled on the old
+ * BD2606MVV driver (0.5-32 mA, 0.5 mA step); TBC in S2 for the DRV8214
+ * H-bridge board.
  *
  * MATLAB reference: Detumbling.m L144-184, Nadir_pointing.m L196-238
  */
@@ -23,7 +25,8 @@ extern "C" {
  *
  * 1. Clamps each dipole component to ±max_dipole per axis.
  * 2. Converts dipole to intensity [mA] using coil factors.
- * 3. Quantizes intensity to 0.5 mA steps within [0.5, 32] mA range.
+ * 3. Quantizes intensity to MTQ_INTENSITY_STEP_MA steps, limited to
+ *    ±MTQ_MAX_INTENSITY_MA (see adcs_config.h).
  * 4. Recomputes dipole from quantized intensity for consistency.
  *
  * @param[in]  desired_dipole  Desired magnetic dipole [A·m²]
