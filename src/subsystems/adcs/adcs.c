@@ -12,6 +12,7 @@
 #include "task.h"
 
 #include "adcs.h"
+#include "adcs_bench.h"
 #include "adcs_types.h"
 #include "adcs_config.h"
 #include "adcs_mode_manager.h"
@@ -46,6 +47,10 @@ void adcs_task(void *pv_parameters) {
 static void setup_adcs(void) {
     // Apply the default configuration
     deferred_notifications = 0;
+
+#ifdef ADCS_BENCH
+    adcs_bench_run();
+#endif
 }
 
 /**

@@ -117,12 +117,16 @@ option(RADIO_MOCK "Use mock radio implementation" OFF)
 # prints TIM5-based microsecond timing for auth tag compute and CAD scan duration over USART2.
 option(POCAT_TEST_INSTRUMENTATION "Enable bench test campaign timing instrumentation" OFF)
 
+# ADCS reference-model benchmark (DWT cycle counts printed once at ADCS task start, see adcs_bench.h)
+option(ADCS_BENCH "Enable the one-shot ADCS reference-model benchmark" OFF)
+
 # Embedded macros(defines)
 target_compile_definitions(${EXECUTABLE} PRIVATE
     ${MCU_MODEL}
     USE_HAL_DRIVER
     $<$<BOOL:${RADIO_MOCK}>:RADIO_MOCK>
     $<$<BOOL:${POCAT_TEST_INSTRUMENTATION}>:POCAT_TEST_INSTRUMENTATION>
+    $<$<BOOL:${ADCS_BENCH}>:ADCS_BENCH>
 )
 
 # Add header directories (AFTER add_executable !!)

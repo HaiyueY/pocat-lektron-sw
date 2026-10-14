@@ -1,11 +1,14 @@
 #!/bin/bash
 
-# Usage: ./build.sh [--mock] [--clean] [--test-instr]
+# Usage: ./build.sh [--mock] [--clean] [--test-instr] [--adcs-bench]
 #   --mock        Build with the mock radio (no hardware required)
 #   --clean       Remove the build directory before building (force full rebuild)
 #   --test-instr  Enable bench test campaign timing instrumentation
 #                 (auth tag / CAD scan microsecond timing over USART2,
 #                 see ir-report/test-campaign.md). Off by default.
+#   --adcs-bench  Run the one-shot ADCS reference-model benchmark at ADCS
+#                 task start (DWT cycle counts over UART4, see adcs_bench.h).
+#                 Off by default.
 #
 # Requires POCAT_PSK (32 hex chars = 16-byte PSK, §4.7) to be set in the
 # environment.  build.sh generates include/subsystems/comms/psk.h from the
@@ -14,11 +17,13 @@
 RADIO_MOCK=OFF
 CLEAN=0
 TEST_INSTR=OFF
+ADCS_BENCH=OFF
 for arg in "$@"; do
     case "$arg" in
         --mock)        RADIO_MOCK=ON ;;
         --clean)       CLEAN=1 ;;
         --test-instr)  TEST_INSTR=ON ;;
+        --adcs-bench)  ADCS_BENCH=ON ;;
     esac
 done
 
@@ -52,7 +57,7 @@ if [ "$CLEAN" -eq 1 ]; then
 fi
 mkdir -p build
 cd build
-cmake .. -DRADIO_MOCK=$RADIO_MOCK -DPOCAT_TEST_INSTRUMENTATION=$TEST_INSTR
+cmake .. -DRADIO_MOCK=$RADIO_MOCK -DPOCAT_TEST_INSTRUMENTATION=$TEST_INSTR -DADCS_BENCH=$ADCS_BENCH
 make -j4    # 4 threads (Adjust to your number of cores)
 cd ..
 
