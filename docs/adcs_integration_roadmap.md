@@ -1,6 +1,6 @@
 # ADCS 集成路线图 — pocat-lektron-sw
 
-> 状态：草案 · 2026-10-14 · S1 已完成（上板一项待硬件）
+> 状态：草案 · 2026-10-14 · S1 已完成（上板一项待硬件）· S3 已完成（DWT 周期实测待硬件）
 > 目标：把 `src/subsystems/adcs/` 中已在主机仿真里验证过的 ADCS 算法完整接入 FreeRTOS 飞控软件，并在 FlatSat / 亥姆霍兹线圈上完成验收。
 
 已验证的算法（主机仿真，`test/`）：
@@ -30,18 +30,20 @@
 | 4 | **当前 ADCS 板 `PQ_ADCS_HBridge` 使用 4×DRV8214 H 桥**，固件与仿真仍按旧板 BD2606MVV 建模；头文件写 0.5–32 mA，`adcs_config.h` 写 150 mA | `../pocat-hw/README.md`<br>`include/subsystems/adcs/adcs_magnetorquer.h:6`<br>`include/subsystems/adcs/adcs_config.h:78-80` | S2（回灌算法） |
 | 5 | ADCS 所有 I²C 器件（IIM-42652、MMC5983MA@0x30、4×DRV8214）挂在 **SDA3/SCL3**；CSS = TMUX1108（`SEL_PH0..2`）+ 单路 `ADC_PH`；板供电由 `PoL_ADCS_POWER_EN` 控制 | ADCS / OBC 原理图 global labels | S2 |
 | 6 | `HAL_I2C_MODULE_ENABLED` 被注释；`.ioc`（2026-09-30）中没有 I2C3，落后于 2026-10-09 的 OBC 原理图；`periph_reconfigure_for_freq()` 不处理 I²C；ADC1 被 `temperature.c` 无锁使用 | `include/core/stm32l4xx_hal_conf.h:43`<br>`src/utils/periph.c:52-76`<br>`src/utils/temperature.c` | S2 |
-| 7 | MCU 只有单精度 FPU（`fpv4-sp-d16`），ADCS 全部用 `double` → 软浮点 | `CMakeLists.txt:16-20` | S3 / S4 |
-| 8 | 参考 IGRF 为 IGRF-13（有效期到 2025），发射在 2027 Q3 → 需 IGRF-14；`igrf13()` 把 29 KB 的 `double gh[3645]` 放在**局部变量**（ADCS 栈仅 4 KB）；`igrf13.h` 声明 `igrf13_ngdc`，实现叫 `igrf12_ngdc`；`sgp4.c` 使用全局可变量 + `printf` | `reference/ADCS/igrf13syn.c:53-55`<br>`reference/ADCS/igrf13.c:339`<br>`reference/ADCS/sgp4.c:6` | S3 |
-| 9 | RTC 失去备份后复位到 2000-01-01，系统中没有“时间有效”概念 | `src/utils/periph.c:298-336` | S3 / S4 |
+| 7 | MCU 只有单精度 FPU（`fpv4-sp-d16`），ADCS 全部用 `double` → 软浮点。S3 估算参考矢量更新约 0.2 M 周期/次（2 MHz 下约 100 ms），IGRF 递推中的开方已改为查表；实测待 `ADCS_BENCH` | `CMakeLists.txt:16-20`<br>`docs/adcs_resource_budget.md` S3 节 | S3 / S4 |
+| 8 | ~~参考 IGRF 为 IGRF-13（有效期到 2025），发射在 2027 Q3 → 需 IGRF-14；`igrf13()` 把 29 KB 的 `double gh[3645]` 放在**局部变量**（ADCS 栈仅 4 KB）；`igrf13.h` 声明 `igrf13_ngdc`，实现叫 `igrf12_ngdc`；`sgp4.c` 使用全局可变量 + `printf`~~ **S3 已解决**：新写 `adcs_sgp4`（Vallado，WGS-72）、`adcs_igrf`（IGRF-14，栈占用与阶数无关）、`adcs_tle`、`adcs_sun`、`adcs_ephemeris`；`reference/ADCS/` 保持不动 | `src/subsystems/adcs/adcs_{sgp4,igrf,tle,sun,ephemeris}.c`<br>`docs/adcs_orbit_env_models.md` | S3 |
+| 9 | RTC 失去备份后复位到 2000-01-01，系统中没有“时间有效”概念。**时间有效性不归 ADCS**（2026-10-14 决定），由 OBC/OBDH 负责；ADCS 直接使用 `time_get_unix()` | `src/utils/periph.c:298-336` | OBC / OBDH |
 | 10 | 代码无 INIT 态；SUNSAFE/SURVIVAL 直接暂停 ADCS（文档要求只采 HK）；频率表（文档 CONTINGENCY = 26 MHz）与任务优先级表也与代码不一致 | `src/subsystems/obc/state_machine.c:54-88` vs 文档 §Satellite Operational Modes | S4 / S5 |
 | 11 | 没有“设置 ADCS 模式”的 TC；`TC_UPLOAD_ADCS_TLE/CAL` 只有注释；Flash 中 TLE 地址重复定义（`TLE_ADDR` vs `TLE_ADDR1/2`）；HT 存储（`ht_handling.c`）与 EPS 电量读取均为空桩 | `src/subsystems/comms/tc_handler.c:71-117`<br>`include/utils/flash.h:57-65, 97-98` | S5 |
 | 12 | 健康检查周期 5 s（`obc.c` 中 `health_config`），暂停 ACK 超时 10 s；`tm_check_pause()` 收到 PAUSE 立即 ACK → ADCS 必须在 ACK 前关闭线圈 | `src/subsystems/obc/task_management.c:134-171` | S4 |
-| 13 | APE 要求 < 20°；当前 48 h 仿真峰值 18.3°，余量薄，且基于旧 MTQ 量化模型 | `docs/adcs_nadir_yaw_invariance_analysis.md` | S2 / S6 |
+| 13 | APE 要求 < 20°；当前 48 h 仿真峰值 18.3°，余量薄，且基于旧 MTQ 量化模型。S3 真值环境（500 km SSO、实际 IGRF、运动太阳）下 10 个工况的最差 APE 为 95.2%，偏离均出现在阴影中开始 nadir 之后（见 #20） | `docs/adcs_nadir_yaw_invariance_analysis.md`<br>`docs/adcs_orbit_env_models.md` §5.2 | S2 / S4a / S6 |
 | 14 | 上游 `15a4761` 把 printf 改到 **UART4（PC10/PC11）**；Nucleo 的 ST-LINK 虚拟串口在 USART2，看不到输出 | `src/utils/log.c`、`src/utils/periph.c` | S1（上板） |
 | 15 | `build.sh` 需要环境变量 `POCAT_PSK`（32 位十六进制，生成 `psk.h`）；`make` 失败时 `build.sh` 仍返回 0 | `build.sh` | S1 |
 | 16 | `./build.sh --mock` 编译失败：`radiolib_wrapper_mock.c` 仍用 TT&C v2 已删除的 `RadioEvents_t`（归 COMMS）。无射频的 Nucleo 上板与 PIL 需要它 | `src/utils/RadioLib/radiolib_wrapper_mock.c` | S1（上板）/ S4 PIL |
 | 17 | 状态已改名为 `OBC_STATE_BOOT/NM/CM/SSM/SM/SAFE_HOLD`；`BOOT` 有枚举，但 `tasks_for_state()` 的 default 分支会启动全部任务，没有 INIT 逻辑 → #10 仍成立 | `include/subsystems/obc/state_machine.h` | S4 / S5 |
 | 18 | 飞控端 `adcs_mode_init()` 只初始化 `mode`、计数器和 `dt`，其余字段（陀螺、磁强计、估计量）未定义；主机测试曾因此在 detumble 第 0 步得到 NaN（测试已改为零初始化） | `src/subsystems/adcs/adcs_mode_manager.c:28` | S4a |
+| 19 | `determination_update()` 的阴影分支用 `b_field_eci_prev` 求 dB/dt，但这个字段从未被更新（只在 `nadir_init()` 中清零）。目前 `nadir_step()` 只在有日照时调用该函数，所以这个分支不可达；以后启用前必须先补上更新 | `src/subsystems/adcs/adcs_determination.c:107-141`<br>`src/subsystems/adcs/adcs_nadir.c:51` | S4a |
+| 20 | `nadir_init()` 把姿态估计置为单位四元数；如果在阴影中进入 nadir，第一次日照 TRIAD 之前只有从这个任意初值出发的陀螺传播，此时的“捕获”没有意义。S3 闭环中 10 个工况有 4 个在阴影中开始，捕获后又偏离到 24–69° | `src/subsystems/adcs/adcs_nadir.c:55`<br>`docs/adcs_orbit_env_models.md` §7.1 | S4a |
 
 ---
 
@@ -107,21 +109,21 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 ### S3 轨道与环境模型
 
-主机先行，可与 S2 并行。
+主机先行，可与 S2 并行。设计、验证与误差预算见 `docs/adcs_orbit_env_models.md`。
 
 **任务**
 
-- **SGP4（Vallado 版）。** 去掉全局可变量与 `printf`，`satrec` 静态分配；用 Vallado `SGP4-VER.TLE` 测试向量做主机单测。保持 `double`（时间 × 平均运动需要精度）。
-- **IGRF-14**（2025 epoch + SV 至 2030）。系数以 `static const float` 存入 Flash。阶数通过仿真权衡（n = 1 倾斜偶极 / 8 / 13：方向误差 vs CPU 周期 vs TRIAD 误差）确定，不预先定死“简化模型”。
-- **太阳模型。** 低精度星历（约 0.01°）+ 圆柱阴影模型，用于与 CSS 的 `sun_visible` 交叉校验。
-- **坐标系统一。** 位置（SGP4 输出 TEME）、B 场、太阳方向放在同一惯性系；用 GMST 做 ECEF ↔ ECI 转换。TEME 与 J2000 之间约 0.3° 的差异记为已知误差。
-- **时间。** `time_get_unix()` → JD(UTC)；引入 `time_valid` 标志（RTC 复位或从未授时则无效），以及 TLE 老化上限（例如 14 天）。
-- **仿真中分离“真值模型”与“星上模型”。** `test/sim/sim_environment.c` 的真值使用高阶 IGRF + 真实太阳运动，星上算法使用截断模型，以暴露模型误差。
+- [x] **SGP4（Vallado 版）。** `adcs_sgp4`：逐行移植近地分支，使用 WGS-72 常数；没有全局量和 `printf`，记录由调用方持有，传播函数只读、可重入；深空根数直接拒绝。`adcs_tle`：定列解析 + 校验和。保持 `double`。
+- [x] **IGRF-14**（2025 epoch + SV 至 2030）。系数以 `static const float` 存入 Flash，由 `scripts/adcs/gen_igrf14_coeffs.py` 从 NCEI 文件生成；按 m 列递推，栈占用与阶数无关，递推中的开方改为查表。阶数经开环 + 闭环权衡定为 **n = 7**：方向误差 95 分位 0.25°，闭环与 n = 13 无显著差异；倾斜偶极（n = 1）的 95 分位达 21°。
+- [x] **太阳模型。** 天文年历低精度星历（与 astropy 实测相差 0.0092°）+ 圆柱阴影模型，用于与 CSS 的 `sun_visible` 交叉校验。
+- [x] **坐标系统一。** 全部参考矢量用 TEME 表达，地磁场经 GMST 旋转在地固系中计算；由于坐标系统一，TEME 与 J2000 之间约 0.37° 的差异不影响姿态。
+- [x] **时间。** `adcs_time`：Unix ↔ JD、十进制年、TLE 历元、GMST。**时间有效性不归 ADCS**（2026-10-14 决定，由 OBC/OBDH 负责）；ADCS 只上报 TLE 年龄（超过 `ADCS_TLE_MAX_AGE_S` = 14 天时置 `ADCS_EPH_TLE_STALE`）。
+- [x] **仿真中分离“真值模型”与“星上模型”。** `sim_env_init_ephem()` 的真值为设计 TLE（500 km SSO）+ IGRF-14 n = 13 + 运动的太阳；`test_nadir --ephem` 的控制器从 `adcs_ephem_update(ADCS_IGRF_ORDER)` 取参考矢量（ctest `nadir_ephem`）。原 `sim_env_init()` 不变，S1 的回归输出逐位相同。
 
 **出口准则**
 
-- [ ] 主机黄金向量比对通过（SGP4 位置与 Vallado 结果相差 < 1 m；IGRF 与官方实现的偏差符合所选阶数的预期）
-- [ ] 在目标板上用 DWT 周期计数测出每次参考矢量更新的 CPU 时间、栈水位与 Flash 增量，记入预算表
+- [x] 主机黄金向量比对通过（ctest `ephemeris`，64 项）：SGP4 与 Vallado 相差 7.3 µm（< 1 m），9 组近地根数共 158 个历元，报错截止点一致；IGRF n = 13 / 8 / 1 与 ppigrf 相差 0.0005 nT；太阳与 astropy 相差 0.0092°
+- [ ] 在目标板上用 DWT 周期计数测出每次参考矢量更新的 CPU 时间与栈水位 —— **待硬件**：测量钩子已就绪（`./build.sh --adcs-bench`）。Flash 增量（接入后约 +30.7 KB）与静态栈（1.4 / 1.7 KB，都低于 nadir 路径）已记入预算表
 
 ### S4 ADCS 任务闭环
 
@@ -131,7 +133,8 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 - **周期调度。** 按绝对截止时间计算 `xTaskNotifyWait` 的超时；`health_kick` 与控制周期解耦（每 ≤ 1 s 一次），以支持消旋 1–2 s 和未来 nadir 10 s 的自适应周期。
 - **周期时序（分时死区）。** MTQ 关 → 等待线圈电流衰减 → 读磁强计（含 SET/RESET）/ 陀螺 / CSS → 更新参考矢量 → `adcs_mode_step()` → 施加 MTQ。实测死区并更新 `DETUMBLE_DEAD_TIME_S`。
 - **暂停/复位协议。** 收到 `N_TASK_PAUSE` 时先关线圈，再交给 `tm_check_pause()` 发 ACK；健康复位后的 setup 也先关线圈；恢复时重置计时与滤波器。
-- **模式管理。** 区分“期望模式”与“当前模式”，由任务层负责排序（例：期望 NADIR 但 |ω| 过大 → 先 DETUMBLING → IDLE → NADIR）。加入 FDIR 转换：nadir 中 |ω| 超限 → 消旋；`time_valid` / TLE 失效或传感器无效 → IDLE。`nadir_step` 检查各传感器的 `valid` 标志。
+- **参考矢量。** `adcs_orbit_t` 静态分配；每个周期先调用 `adcs_ephem_update()` 再调用 `adcs_mode_step()`（接口见 `docs/adcs_orbit_env_models.md` §1.1）；收到 `N_ADCS_NEW_TLE` 时调用 `adcs_orbit_load_tle()`。
+- **模式管理。** 区分“期望模式”与“当前模式”，由任务层负责排序（例：期望 NADIR 但 |ω| 过大 → 先 DETUMBLING → IDLE → NADIR）。加入 FDIR 转换：nadir 中 |ω| 超限 → 消旋；星历无效（`ADCS_EPH_INVALID_MASK`）、TLE 过期（`ADCS_EPH_TLE_STALE`）或传感器无效 → IDLE；第一次有效 TRIAD 之前不进入 nadir（发现 #20）。`nadir_step` 检查各传感器的 `valid` 标志；修复或删除 `determination_update()` 的阴影分支（发现 #19）。
 
 **S4b — 真实 HAL 集成**（需要 S2 + S3）
 
@@ -152,9 +155,9 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 **任务**
 
-- **TC。** 实现 `TC_UPLOAD_ADCS_TLE`（多包传输 + 行校验和 + 试传播通过后再提交；A/B 双份保留旧 TLE）和 `TC_UPLOAD_ADCS_CAL`；**新增** ADCS 模式/参数 TC（ID 需与地面站软件同步）。
+- **TC。** 实现 `TC_UPLOAD_ADCS_TLE`（多包传输 + 行校验和 + 试传播通过后再提交，后两步由 `adcs_orbit_load_tle()` 完成；A/B 双份保留旧 TLE）和 `TC_UPLOAD_ADCS_CAL`；**新增** ADCS 模式/参数 TC（ID 需与地面站软件同步）。
 - **Flash。** 合并为单一 ADCS 配置块（版本号 + CRC），清理重复定义的 TLE 地址；优先放在 bank 2，避免擦写时停顿 bank 1 的取指。
-- **TM。** 提供 `adcs_get_telemetry()` 快照接口。beacon 目前只用了 48 字节中的 12 字节，为 ADCS 定义字段：模式、|ω|、估计指向误差、太阳可见、传感器健康、TLE 年龄、`time_valid`。历史遥测依赖 OBDH 的 `ht_handling` 实现。
+- **TM。** 提供 `adcs_get_telemetry()` 快照接口。beacon 目前只用了 48 字节中的 12 字节，为 ADCS 定义字段：模式、|ω|、估计指向误差、太阳可见、传感器健康、TLE 年龄（`tle_age_s`）、星历状态位（`eph.status`）。历史遥测依赖 OBDH 的 `ht_handling` 实现。
 - **星务联动。** 与 OBC 负责人对齐以下问题：
   - INIT/LEOP 态（30 min 静默后允许自动消旋）；
   - SUNSAFE/SURVIVAL 下 ADCS 是“只采 HK”还是暂停；
@@ -201,9 +204,9 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 | # | 风险 | 缓解 |
 |---|------|------|
 | 1 | MTQ 硬件模型不一致（DRV8214 vs BD2606MVV），现有 3.6° / 18° 结论可能变化 | S2 开始时先在仿真中建立 DRV8214 量化模型 |
-| 2 | IGRF-13 已过期，发射在 2027 Q3 | S3 直接使用 IGRF-14 |
-| 3 | 双精度软浮点在低主频状态下的 CPU 开销 | S3/S4 用 DWT 实测；只在测量证明必要时才把 IGRF/控制改为 `float` |
-| 4 | RTC 失效时用错误时间算参考矢量，导致错误指向 | `time_valid` 门控 nadir；授时 TC |
+| 2 | IGRF-13 已过期，发射在 2027 Q3 | **S3 已缓解**：使用 IGRF-14（有效至 2030） |
+| 3 | 双精度软浮点在低主频状态下的 CPU 开销 | S3 估算约 0.2 M 周期/次（2 MHz 下约 100 ms），IGRF 开方已查表；S4 用 DWT 实测；必要时先降低参考矢量的更新频率，只在测量证明必要时才把 IGRF/控制改为 `float` |
+| 4 | RTC 失效时用错误时间算参考矢量，导致错误指向 | 时间有效性由 OBC/OBDH 负责（ADCS 不处理，2026-10-14 决定）；授时 TC |
 | 5 | 6 个器件共享一条 I²C3，总线锁死会让 ADCS 全部失明 | 超时 + 9 脉冲恢复 + PoL 断电重启 |
 | 6 | 星体剩磁和线圈对磁强计的污染 | 分时死区 + 整星亥姆霍兹校准 |
 | 7 | 依赖他人未完成的模块（EPS 电量、OBDH 历史遥测、TC ID 与地面站同步） | 尽早定义接口；ADCS 侧先用 TC 驱动测试 |
@@ -215,6 +218,6 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 | 是否在代码中加入 INIT 态，以及 LEOP 自动消旋的触发条件 | OBC | S4a |
 | SUNSAFE/SURVIVAL 下 ADCS：只采 HK 还是暂停 | OBC | S4a |
 | ADCS 任务优先级与各态主频（CONTINGENCY 26 MHz？） | OBC | S4b |
-| IGRF 阶数 | ADCS（仿真结果） | S3 |
+| ~~IGRF 阶数~~ **已决：n = 7**（S3 权衡研究，`docs/adcs_orbit_env_models.md` §5） | ADCS | S3 |
 | 新 ADCS TC 的 ID 与 beacon 字段布局 | COMMS + 地面站 | S5 |
 | 重启后是否恢复上一次的 ADCS 模式 | OBC + ADCS | S5 |
