@@ -52,10 +52,16 @@ set(PROJECT_INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/subsystems/transceiver
 )
 
+# Pick exactly one heap + one port to compile; the rest of the FreeRTOS tree can
+# stay on disk untouched and simply won't be added to the build.
+set(FREERTOS_HEAP "heap_4"       CACHE STRING "FreeRTOS heap_x to compile (heap_1..heap_5)")
+set(FREERTOS_PORT "GCC/ARM_CM4F" CACHE STRING "FreeRTOS portable layer to compile")
+
 set(FREERTOS_INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/CMSIS_RTOS_V2
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/GCC/ARM_CM4F
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/CMSIS/RTOS2/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/${FREERTOS_PORT}
 )
 
 set(RADIOLIB_INCLUDE_DIRECTORIES
@@ -66,6 +72,9 @@ set(RADIOLIB_INCLUDE_DIRECTORIES
 file(GLOB_RECURSE STM32CUBEMX_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/external/*.c // 
 )
+# FreeRTOS is added explicitly below (selectable heap/port), so drop it from the broad
+# sweep; otherwise every port.c and every heap_x.c under external/ would get compiled.
+list(FILTER STM32CUBEMX_SOURCES EXCLUDE REGEX "external/FreeRTOS/")
 
 file(GLOB_RECURSE PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.c
@@ -74,11 +83,16 @@ file(GLOB_RECURSE PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/subsystems/*/*.c
 )
 
-file(GLOB_RECURSE FREERTOS_SOURCES
+# FreeRTOS: core kernel (non-recursive) + exactly one port + one heap + the wrapper.
+file(GLOB FREERTOS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/CMSIS_RTOS_V2/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/GCC/ARM_CM4F/*.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/MemMang/*.c
+)
+list(APPEND FREERTOS_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/${FREERTOS_PORT}/port.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/portable/MemMang/${FREERTOS_HEAP}.c
+)
+list(APPEND FREERTOS_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
 )
 
 # --- RadioLib sources ---
@@ -99,11 +113,16 @@ add_executable(${EXECUTABLE}
 # Mock radio option (no hardware required: prints config and TX packets, RX always times out)
 option(RADIO_MOCK "Use mock radio implementation" OFF)
 
+# Test instrumentation option (bench test campaign only, see ir-report/test-campaign.md):
+# prints TIM5-based microsecond timing for auth tag compute and CAD scan duration over USART2.
+option(POCAT_TEST_INSTRUMENTATION "Enable bench test campaign timing instrumentation" OFF)
+
 # Embedded macros(defines)
 target_compile_definitions(${EXECUTABLE} PRIVATE
     ${MCU_MODEL}
     USE_HAL_DRIVER
     $<$<BOOL:${RADIO_MOCK}>:RADIO_MOCK>
+    $<$<BOOL:${POCAT_TEST_INSTRUMENTATION}>:POCAT_TEST_INSTRUMENTATION>
 )
 
 # Add header directories (AFTER add_executable !!)

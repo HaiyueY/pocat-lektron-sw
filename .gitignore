@@ -85,3 +85,4 @@ docs/latex/
 
 CLAUDE.md
 .github/
+include/subsystems/comms/psk.h

@@ -24,6 +24,11 @@
 #include "queue.h"
 #include "semphr.h"
 
+#define FLASH_QUEUE_SEND_TIMEOUT_MS 100u   /* wait for room in the OBDH request queue */
+#define FLASH_OP_TIMEOUT_MS         2000u  /* wait for OBDH to complete the operation */
+
+// Memory map
+
 #define PHOTO_ADDR 					0x08040000
 #define COMMS_CONFIG_ADDR
 #define COMMS_CONFIG_ADDR
@@ -91,6 +96,8 @@
 
 #define ANTENNA_DEPLOYED_ADDR       0x08030205
 
+#define BOOT_TIME_ADDR              0x08030206 // 4 bytes (OBC boot unix time; beacon uptime = now - boot)
+
 
 /**********OTHER ADDR****************************/
 #define DATA_ADDR					0x08030000
@@ -112,8 +119,6 @@
 #define SURVIVAL_TH_ADDR            0x08030803  // 1
 
 #define RFI_CONFIG_ADDR             0x08031000  // 8
-
-
 
 
 extern EventGroupHandle_t xEventGroup;
@@ -154,6 +159,7 @@ void Read_Flash(uint32_t data_addr, uint8_t *data, uint16_t n_bytes);
  * @param length Length of the data to be written
  * @return HAL_StatusTypeDef Returns wether the operation has been sucesful or not (indicates which type of error
  * has happened)
+ * @todo blocks until OBDH answers (no timeout yet) — see obdh_submit_request. 
  */
 HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size_t length);
 
@@ -165,6 +171,7 @@ HAL_StatusTypeDef OBDH_Write_Request(uint32_t address, const uint8_t *data, size
  * @param length Length of the data that has to be read. 
  * @return HAL_StatusTypeDef Returns wether the operation has been sucesful or not (indicates which type of error
  * has happened)
+ * @todo blocks until OBDH answers (no timeout yet) — see obdh_submit_request. 
  */
 HAL_StatusTypeDef OBDH_Read_Request(uint32_t address,uint8_t *data, size_t length);
 
