@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     srand(42);
 
     /* Initialize ADCS state */
-    adcs_state_t state;
+    adcs_state_t state = {0};
     adcs_mode_init(&state);
 
     /* Initial conditions */

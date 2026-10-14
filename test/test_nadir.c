@@ -130,7 +130,7 @@ int main(void)
 
     srand(42);
 
-    adcs_state_t state;
+    adcs_state_t state = {0};
     adcs_mode_init(&state);
 
     /* Initial conditions: PERFECT NADIR ATTITUDE for hold-test diagnosis.

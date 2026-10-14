@@ -158,7 +158,7 @@ int main(void)
     srand(42);
 
     /* Initialize state */
-    adcs_state_t state;
+    adcs_state_t state = {0};
     adcs_mode_init(&state);
 
     /* Initial conditions: 90°/s tumble */
