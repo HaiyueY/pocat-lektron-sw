@@ -79,8 +79,13 @@ add_executable(test_ephemeris
     ${ADCS_SOURCES}
 )
 
+add_executable(test_igrf_order
+    test_igrf_order.c
+    ${ADCS_SOURCES}
+)
+
 # --- Regression tests (ctest) ---
-# test_freq_sweep is a parameter-sweep tool, not a pass/fail test.
+# test_freq_sweep and test_igrf_order are study tools, not pass/fail tests.
 
 enable_testing()
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results)
