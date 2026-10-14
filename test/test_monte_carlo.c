@@ -174,7 +174,7 @@ static run_result_t run_single(vec3d_t omega_init, quat_t q_init,
 {
     run_result_t result = {0, 0.0, 0.0};
 
-    adcs_state_t state;
+    adcs_state_t state = {0};
     adcs_mode_init(&state);
     adcs_mode_request(&state, ADCS_MODE_DETUMBLING);
 

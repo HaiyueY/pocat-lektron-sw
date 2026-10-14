@@ -42,7 +42,7 @@ int main(void)
 {
     printf("=== ADCS Mode Manager Test ===\n\n");
 
-    adcs_state_t state;
+    adcs_state_t state = {0};
     adcs_mode_init(&state);
 
     /* Test 1: Initial state is IDLE */
