@@ -1,6 +1,6 @@
 # ADCS 集成路线图 — pocat-lektron-sw
 
-> 状态：草案 · 2026-10-14
+> 状态：草案 · 2026-10-14 · S1 已完成（上板一项待硬件）
 > 目标：把 `src/subsystems/adcs/` 中已在主机仿真里验证过的 ADCS 算法完整接入 FreeRTOS 飞控软件，并在 FlatSat / 亥姆霍兹线圈上完成验收。
 
 已验证的算法（主机仿真，`test/`）：
@@ -24,9 +24,9 @@
 
 | # | 发现 | 位置 | 阶段 |
 |---|------|------|------|
-| 1 | `obc.c` 残留冲突标记，来自 2026-06-01 合并 `9385c52`。上游侧 `fcf80c6` 是干净版本，与 `task_management.c` 的建/重置任务逻辑一致 | `src/subsystems/obc/obc.c:72-87, 123-271` | S1 |
-| 2 | `adcs.c` 自定义 `bit0=DETUMBLE, bit1=NADIR`，与 `notifications.h` 的 `bit0=IDLE, bit1=DETUMBLING, bit2=NADIR` 冲突；`adcs_task` 只是空壳 | `src/subsystems/adcs/adcs.c:25-26`<br>`include/utils/notifications.h:25-29` | S1 / S4 |
-| 3 | 开发机上没有 `arm-none-eabi-gcc`、`st-flash` / `openocd`；固件尚未在本机编译过 | — | S1 |
+| 1 | ~~`obc.c` 残留冲突标记，来自 2026-06-01 合并 `9385c52`~~ **S1 已解决**：合并上游 `15a4761`，`obc.c` 逐字取上游版本（ADCS 的建/复位/健康登记由 `task_management.c` 负责） | `src/subsystems/obc/obc.c` | S1 |
+| 2 | `adcs.c` 自定义 `bit0=DETUMBLE, bit1=NADIR`，与 `notifications.h` 的 `bit0=IDLE, bit1=DETUMBLING, bit2=NADIR` 冲突（**S1 已改用 `N_ADCS_*`**）；`adcs_task` 只是空壳（S4） | `src/subsystems/adcs/adcs.c:25-26`<br>`include/utils/notifications.h:25-29` | S1 / S4 |
+| 3 | ~~开发机上没有 `arm-none-eabi-gcc`~~ **S1 已解决**：Arm GNU Toolchain 14.3.Rel1 装在 `~/opt/`，固件已在本机编译通过；`st-flash` 仍未装（等硬件） | — | S1 |
 | 4 | **当前 ADCS 板 `PQ_ADCS_HBridge` 使用 4×DRV8214 H 桥**，固件与仿真仍按旧板 BD2606MVV 建模；头文件写 0.5–32 mA，`adcs_config.h` 写 150 mA | `../pocat-hw/README.md`<br>`include/subsystems/adcs/adcs_magnetorquer.h:6`<br>`include/subsystems/adcs/adcs_config.h:78-80` | S2（回灌算法） |
 | 5 | ADCS 所有 I²C 器件（IIM-42652、MMC5983MA@0x30、4×DRV8214）挂在 **SDA3/SCL3**；CSS = TMUX1108（`SEL_PH0..2`）+ 单路 `ADC_PH`；板供电由 `PoL_ADCS_POWER_EN` 控制 | ADCS / OBC 原理图 global labels | S2 |
 | 6 | `HAL_I2C_MODULE_ENABLED` 被注释；`.ioc`（2026-09-30）中没有 I2C3，落后于 2026-10-09 的 OBC 原理图；`periph_reconfigure_for_freq()` 不处理 I²C；ADC1 被 `temperature.c` 无锁使用 | `include/core/stm32l4xx_hal_conf.h:43`<br>`src/utils/periph.c:52-76`<br>`src/utils/temperature.c` | S2 |
@@ -37,6 +37,11 @@
 | 11 | 没有“设置 ADCS 模式”的 TC；`TC_UPLOAD_ADCS_TLE/CAL` 只有注释；Flash 中 TLE 地址重复定义（`TLE_ADDR` vs `TLE_ADDR1/2`）；HT 存储（`ht_handling.c`）与 EPS 电量读取均为空桩 | `src/subsystems/comms/tc_handler.c:71-117`<br>`include/utils/flash.h:57-65, 97-98` | S5 |
 | 12 | 健康检查周期 5 s（`obc.c` 中 `health_config`），暂停 ACK 超时 10 s；`tm_check_pause()` 收到 PAUSE 立即 ACK → ADCS 必须在 ACK 前关闭线圈 | `src/subsystems/obc/task_management.c:134-171` | S4 |
 | 13 | APE 要求 < 20°；当前 48 h 仿真峰值 18.3°，余量薄，且基于旧 MTQ 量化模型 | `docs/adcs_nadir_yaw_invariance_analysis.md` | S2 / S6 |
+| 14 | 上游 `15a4761` 把 printf 改到 **UART4（PC10/PC11）**；Nucleo 的 ST-LINK 虚拟串口在 USART2，看不到输出 | `src/utils/log.c`、`src/utils/periph.c` | S1（上板） |
+| 15 | `build.sh` 需要环境变量 `POCAT_PSK`（32 位十六进制，生成 `psk.h`）；`make` 失败时 `build.sh` 仍返回 0 | `build.sh` | S1 |
+| 16 | `./build.sh --mock` 编译失败：`radiolib_wrapper_mock.c` 仍用 TT&C v2 已删除的 `RadioEvents_t`（归 COMMS）。无射频的 Nucleo 上板与 PIL 需要它 | `src/utils/RadioLib/radiolib_wrapper_mock.c` | S1（上板）/ S4 PIL |
+| 17 | 状态已改名为 `OBC_STATE_BOOT/NM/CM/SSM/SM/SAFE_HOLD`；`BOOT` 有枚举，但 `tasks_for_state()` 的 default 分支会启动全部任务，没有 INIT 逻辑 → #10 仍成立 | `include/subsystems/obc/state_machine.h` | S4 / S5 |
+| 18 | 飞控端 `adcs_mode_init()` 只初始化 `mode`、计数器和 `dt`，其余字段（陀螺、磁强计、估计量）未定义；主机测试曾因此在 detumble 第 0 步得到 NaN（测试已改为零初始化） | `src/subsystems/adcs/adcs_mode_manager.c:28` | S4a |
 
 ---
 
@@ -64,17 +69,18 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 **任务**
 
-- 安装工具链：ARM GNU Toolchain（arm-none-eabi-gcc + newlib-nano），以及 `stlink`（`flash.sh` 依赖 `st-flash`）或 openocd。
-- 先运行 `scripts/sync-upstream.sh` 同步上游，再在 `dev` 上以上游 `fcf80c6` 的版本重新解决 `obc.c` 冲突（任务的创建与复位已由 `task_management.c` 负责）。
-- `adcs.c`：删除本地 `ADCS_*_MODE` 宏，改用 `N_ADCS_DESIRED_STATE_IDLE/DETUMBLING/NADIR`；为 `N_ADCS_NEW_CALIBRATION` / `N_ADCS_NEW_TLE` 预留空的处理分支。
-- 注释修正：`adcs_nadir.h` 写的是 “+Y body axis”，实际为 +Z；`adcs_magnetorquer.h` 中的 32 mA 与 `adcs_config.h` 中的 150 mA 标注“待 S2 确认”。
-- 主机回归：`test/CMakeLists.txt` 加 `enable_testing()` + `add_test()`（各测试已返回 0/1），`ctest` 作为每次合并的门禁。
+- [x] 安装工具链：Arm GNU Toolchain 14.3.Rel1（`~/opt/`）；开发用 `POCAT_PSK` 放在 `~/.config/pocat/env`。`stlink` 等拿到硬件再装。
+- [x] 合并上游 `15a4761` 到 `dev`；`obc.c` 逐字取上游版本，`.gitignore` 两侧都保留。
+- [x] `adcs.c`：删除本地 `ADCS_*_MODE` 宏，改用 `N_ADCS_DESIRED_STATE_IDLE/DETUMBLING/NADIR`；为 IDLE、`N_ADCS_NEW_CALIBRATION`、`N_ADCS_NEW_TLE` 预留空分支。
+- [x] 注释修正：nadir 轴 +Y → +Z；`adcs_nadir.h/.c` 的算法说明更新为约化姿态误差 + 轨道角速度补偿；MTQ 电流上下限标注“TBC in S2”。
+- [x] 主机回归：`ctest` 登记 `mode_manager`、`detumble`、`nadir`、Monte Carlo 30°/s 和 90°/s（各 N = 50），全套约 14 s。顺带修复：测试中 `adcs_state_t` 未初始化（detumble NaN）；`test_nadir` 判据“≥ 3 次捕获”改为任务 APE 判据（首次捕获后 < 20° 的时间 ≥ 95%）。
 
 **出口准则**
 
-- [ ] `./build.sh` 零错误生成 `.elf`，记录 `--print-memory-usage` 基线
-- [ ] Nucleo-L476RG 上电打印 banner，所有任务创建成功，连续运行 10 min 无 IWDG 复位
-- [ ] `ctest` 全部通过
+- [x] `./build.sh` 零错误生成 `.elf`，基线见 `docs/adcs_resource_budget.md`（FLASH 7.54%，RAM 61.43%，ADCS 栈静态估算 ≈ 60%）
+- [ ] `./build.sh --mock` 零错误 —— 被发现 #16 阻塞（COMMS）
+- [x] `ctest` 全部通过（5/5）
+- [ ] **待硬件**：Nucleo-L476RG 上电打印 banner，所有任务创建成功，连续运行 10 min 无 IWDG 复位。接线：3.3 V USB-TTL 接 PC10 = TX、PC11 = RX、GND，115200 8N1。判定：10 min 内 banner 只出现一次（IWDG 超时 ≈ 4095 × 256 / 32 kHz ≈ 32.8 s，复位会重新打印 banner），且没有 `Error creating` 或 `task reset due to health check` 输出。无射频模块时需要先解决 #16。
 
 ### S2 BSP 与驱动
 
