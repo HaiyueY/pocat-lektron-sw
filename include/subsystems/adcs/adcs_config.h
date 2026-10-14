@@ -197,6 +197,18 @@ extern "C" {
 #define ADCS_CONTROL_DT     1.0
 
 /* =========================================================================
+ * Orbit / Environment Models
+ * ====================================================================== */
+
+/** IGRF-14 truncation degree used on board (1 = tilted dipole … 13 = full).
+ *  See docs/adcs_orbit_env_models.md for the accuracy/cost trade study. */
+#define ADCS_IGRF_ORDER         13
+
+/** TLE age beyond which ephemeris outputs are flagged ADCS_EPH_TLE_STALE [s].
+ *  Reported only; the ADCS task decides what to do with it. */
+#define ADCS_TLE_MAX_AGE_S      (14.0 * 86400.0)
+
+/* =========================================================================
  * Sensor Noise Parameters (for simulation)
  * ====================================================================== */
 

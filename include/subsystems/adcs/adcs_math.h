@@ -86,6 +86,23 @@ static inline vec3d_t vec3d_normalize(vec3d_t v)
     return vec3d_scale(v, 1.0 / n);
 }
 
+/**
+ * Express v in a frame rotated by `angle` about +Z: R3(angle) · v.
+ *
+ * R3(a) = [ cos a  sin a  0 ; −sin a  cos a  0 ; 0  0  1 ]
+ * e.g. r_ecef = vec3d_rot_z(r_teme, gmst), r_teme = vec3d_rot_z(r_ecef, −gmst).
+ */
+static inline vec3d_t vec3d_rot_z(vec3d_t v, double angle)
+{
+    double c = cos(angle);
+    double s = sin(angle);
+    vec3d_t r;
+    r.x =  c * v.x + s * v.y;
+    r.y = -s * v.x + c * v.y;
+    r.z =  v.z;
+    return r;
+}
+
 /* ---- Quaternion operations -------------------------------------------- */
 
 /** Identity quaternion [1, 0, 0, 0] */
