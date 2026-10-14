@@ -9,7 +9,7 @@
 |------|---------|-------|-----|-------------------|----------------------------------------|
 | S1 | dev `0510f06` | 79 092 B（7.54%） | 60 384 B（61.43%） | 静态估算 ≈ 2.4 KB（≈ 60%） | — （S3/S4 用 DWT 实测） |
 | S2 | | | | | |
-| S3 | | | | | |
+| S3 | dev `a585e78` | 79 092 B（7.54%）不变（未接入，被 gc）；接入后约 +30.7 KB | 60 384 B 不变；模型本身无静态 RAM | 参考矢量更新 1428 B / 载入 TLE 1740 B，都低于 nadir 路径，最坏仍 ≈ 2.4 KB | 估算约 0.2 M 周期/次（±2×）≈ 2.5 / 7.7 / 25 / 100 ms；待 `ADCS_BENCH` 实测 |
 | S4 | | | | 实测水位 | |
 
 ---
@@ -72,6 +72,68 @@
 
 ---
 
+## S3 参考模型（2026-10-14）
+
+- 源码：dev `a585e78`（新增 `adcs_time` / `adcs_tle` / `adcs_sgp4` / `adcs_igrf` / `adcs_sun` / `adcs_ephemeris` / `adcs_bench`，`ADCS_IGRF_ORDER` = 7）
+- 构建：与 S1 相同（Debug，`-Og -g3`）。另做一次 `ADCS_BENCH=ON` 构建，让基准代码引用全部模型，从而得到真实的链接增量（包括 libm）。
+
+### 整体占用
+
+| 构建 | FLASH | RAM | 说明 |
+|------|-------|-----|------|
+| 默认 `./build.sh` | 79 092 B（7.54%） | 60 384 B（61.43%） | 与 S1 相同：`adcs_task` 还没有调用模型，`--gc-sections` 把它们全部去掉 |
+| `./build.sh --adcs-bench` | 111 288 B（10.61%） | 60 744 B（61.79%） | +32 196 B / +360 B |
+
+### FLASH 增量构成（`test/tools/map_diff.py` 比较两个 `.map`）
+
+| 来源 | 字节 | 主要组成 |
+|------|------|---------|
+| ADCS 模型 | 18 124 | `adcs_sgp4` 7 628、`adcs_igrf` 4 800（代码 1 840 + 系数与递推表 2 960）、`adcs_tle` 1 926、`adcs_ephemeris` 1 650、`adcs_sun` 1 152、`adcs_time` 960 |
+| libm | 12 220 | `pow` 3 436（SGP4 使用）、`sin`/`cos` 的 `rem_pio2` 链约 3 700、`fmod` 1 064、`atan`/`atan2` 1 400、`sqrt` 616、`floor` 264 等 |
+| libgcc | 396 | 双精度比较与转换（加减乘除在 S1 固件中已经链接） |
+| 基准本身（不属于飞行代码） | 1 338 + 298 | `adcs_bench` 代码与字符串；FreeRTOS `uxTaskGetStackHighWaterMark` |
+| RAM | 360 | 基准用的静态 `adcs_orbit_t`；模型本身没有静态数据 |
+
+S4 接入后预计增加约 30.7 KB（模型 18.1 KB + libm 12.2 KB + libgcc 0.4 KB）。其中 `sin`/`cos`/`sqrt`/`atan2` 也会被 nadir 与定姿算法使用，届时增量的归属会有重叠。如果以后 Flash 紧张，可以先把 SGP4 中的两处 `pow` 改写（可省约 3.4 KB），但目前 Flash 只用了 10.6%，暂不需要。
+
+### 静态栈（`test/tools/stack_depth.py`，基于 bench ELF 的反汇编）
+
+ADCS 函数的帧大小与 GCC `-fstack-usage` 的结果一致；libm 的帧由反汇编得到。
+
+| 入口 | 最坏深度 | 最坏路径 |
+|------|---------|---------|
+| `adcs_ephem_update` | 1 428 B | `adcs_ephem_update`(368) → `adcs_igrf_field_ecef`(256) → `sin`(24) → `__ieee754_rem_pio2`(96) → `__kernel_rem_pio2`(648) → `floor`(24) → `__adddf3`(12) |
+| `adcs_orbit_load_tle` | 1 740 B | `adcs_orbit_load_tle`(416) → `adcs_sgp4_init`(520) → `sin` → … 同上 |
+| `adcs_sgp4_propagate` | 1 028 B | |
+| `adcs_igrf_field_ecef` | 1 060 B | 与阶数无关（不需要 P[n][m] 表） |
+
+S4 的任务按顺序调用 `adcs_ephem_update()` 和 `adcs_mode_step()`，两者不嵌套，所以 ADCS 栈的最坏值仍由 S1 的 nadir 路径决定（2 168 B + 外壳 40 B + 上下文约 200 B ≈ 2.4 KB，约 60%）。新 TLE 在 ADCS 任务中载入时为 1 740 B，同样低于这个值。
+
+注意：`-Og` 下按值传递的 `vec3d_t` 会产生较大的帧（例如 `vec3d_rot_z` 160 B）。S4 如果改用 `-O2`，需要重新测量。
+
+### CPU（待硬件）
+
+在目标板上测量：
+
+```bash
+./build.sh --adcs-bench     # 烧录后在 UART4（115200 8N1）读取 [ADCS_BENCH] 行
+```
+
+输出依次为 `SystemCoreClock`、SGP4、太阳模型、IGRF（n = 1 / 4 / 8 / 13）和完整 `adcs_ephem_update` 的 min / avg / max 周期数，以及 ADCS 栈的剩余字节数。各测 16 个历元，沿设计轨道间隔 600 s。
+
+在拿到实测值之前，先用运算量做数量级估算。M4 的 FPU 只支持单精度，双精度全部走软件：libgcc 的乘、加约 30–60 周期；newlib 的 `sin`/`cos` 约 2–3 k 周期；`pow` 约 5–10 k 周期。
+
+| 部分 | 运算量 | 估算周期数 |
+|------|-------|-----------|
+| IGRF n = 7 | 35 项 × 约 38 次双精度运算 + `atan2`/`sin`/`cos`/`sqrt` | 约 70 k |
+| SGP4 | 约 250 次双精度运算 + 约 25 次三角函数 + 2 次 `pow` + 5 次 `fmod` + 4 次 `sqrt` | 约 90 k |
+| 太阳模型、GMST、两次 R3 旋转、十进制年 | | 约 40 k |
+| **合计** | | **约 0.2 M（±2×）** |
+
+折合 80 / 26 / 8 / 2 MHz 下约为 2.5 / 7.7 / 25 / 100 ms。在 2 MHz、1 Hz 控制频率下约占 10% CPU；必要时可以降低参考矢量的更新频率（例如 10 s 更新一次并插值）。在 IGRF 递推中改为查表平方根常数之前，n = 13 时还要多约 208 次软 `sqrt`。
+
+---
+
 ## 测量方法
 
 ```bash
@@ -87,4 +149,16 @@ cmake -S . -B <tmp>/build-su -DCMAKE_C_FLAGS="-fdata-sections -ffunction-section
 cmake --build <tmp>/build-su -j
 #   对 src/subsystems/adcs/*.c 另加 -fcallgraph-info=su 编译，
 #   沿 .ci 调用图累加各函数 .su 栈帧，求最坏路径
+```
+
+S3 起新增（库函数没有 `.su` 文件，所以改为直接分析 ELF）：
+
+```bash
+# 链接增量：默认构建 vs 让模型全部被引用的 bench 构建
+cmake -S . -B <tmp>/fw-bench -DADCS_BENCH=ON && cmake --build <tmp>/fw-bench -j
+python3 -I test/tools/map_diff.py build/pocat_lektron_sw.map <tmp>/fw-bench/pocat_lektron_sw.map
+
+# 静态栈（包括 libm / libgcc）
+python3 -I test/tools/stack_depth.py <tmp>/fw-bench/pocat_lektron_sw.elf \
+    adcs_ephem_update adcs_orbit_load_tle
 ```
