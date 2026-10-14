@@ -67,3 +67,22 @@ add_executable(test_monte_carlo
     ${ADCS_SOURCES}
     ${SIM_SOURCES}
 )
+
+# --- Regression tests (ctest) ---
+# test_freq_sweep is a parameter-sweep tool, not a pass/fail test.
+
+enable_testing()
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/results)
+
+add_test(NAME mode_manager      COMMAND test_mode_manager)
+add_test(NAME detumble          COMMAND test_detumble)
+add_test(NAME nadir             COMMAND test_nadir)
+add_test(NAME monte_carlo_30dps COMMAND test_monte_carlo 30 50 --seed 42)
+add_test(NAME monte_carlo_90dps COMMAND test_monte_carlo 90 50 --seed 42)
+
+set_tests_properties(mode_manager detumble nadir monte_carlo_30dps monte_carlo_90dps
+    PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        ENVIRONMENT ADCS_TEST_NO_PLOT=1
+        TIMEOUT 120
+)

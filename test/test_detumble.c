@@ -314,13 +314,15 @@ int main(void)
         printf("\nPASS: Detumbling test passed\n");
     }
 
-    /* Auto-generate plots */
-    printf("\nGenerating plots...\n");
-    int plot_rc = system("python3 ../plot_results.py detumble " CSV_FILE " " CSV_DIR "/");
-    if (plot_rc != 0) {
-        printf("WARNING: Plot generation failed (python3 not found or script error)\n");
-    } else {
-        printf("Plots saved to %s/\n", CSV_DIR);
+    /* Auto-generate plots (skipped when ADCS_TEST_NO_PLOT is set, e.g. ctest) */
+    if (getenv("ADCS_TEST_NO_PLOT") == NULL) {
+        printf("\nGenerating plots...\n");
+        int plot_rc = system("python3 ../plot_results.py detumble " CSV_FILE " " CSV_DIR "/");
+        if (plot_rc != 0) {
+            printf("WARNING: Plot generation failed (python3 not found or script error)\n");
+        } else {
+            printf("Plots saved to %s/\n", CSV_DIR);
+        }
     }
 
     return converged ? 0 : (vec3d_norm(omega_true) * RAD_TO_DEG < init_omega_deg_s * 0.1 ? 0 : 1);
