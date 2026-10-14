@@ -6,11 +6,16 @@
  * Magnetic field uses IGRF tilted dipole model (matching MATLAB BDipole.m).
  * Sun direction is fixed in ECI (simplified).
  * Eclipse occurs when the satellite is in Earth's shadow.
+ *
+ * sim_env_init_ephem() switches to the truth environment built on the
+ * on-board model library (SGP4 + IGRF-14 + Sun, TEME, real UTC dates).
  */
 
 #include "sim_environment.h"
 #include "adcs_config.h"
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /** Earth radius [m] */
 #define EARTH_RADIUS    6371000.0
@@ -82,6 +87,11 @@ static void compute_bfield(vec3d_t r_eci, double time_s, vec3d_t *b_eci)
 void sim_env_init(sim_env_t *env)
 {
     env->time_s = 0.0;
+    env->ephem_mode = 0;
+    env->start_unix = 0.0;
+    env->unix_s = 0.0;
+    env->truth_igrf_order = 0;
+    adcs_orbit_init(&env->orbit);
 
     /* Initial position: ascending node, polar orbit in X-Z plane */
     env->pos_eci.x = ORBIT_RADIUS;
@@ -110,9 +120,55 @@ void sim_env_init(sim_env_t *env)
     env->eclipse = 0;
 }
 
+/**
+ * Evaluate the truth environment at start_unix + time_s.
+ * @return 0 on success, -1 if the models report invalid outputs
+ */
+static int ephem_truth_update(sim_env_t *env)
+{
+    adcs_ephem_t eph;
+
+    env->unix_s = env->start_unix + env->time_s;
+    uint8_t st = adcs_ephem_update(&env->orbit, env->unix_s,
+                                   env->truth_igrf_order, &eph);
+    if (st & ADCS_EPH_INVALID_MASK) {
+        return -1;
+    }
+    env->pos_eci = eph.pos_eci;
+    env->vel_eci = eph.vel_eci;
+    env->nadir_eci = eph.nadir_eci;
+    env->b_field_eci = eph.b_field_eci;
+    env->sun_eci = eph.sun_eci;
+    env->eclipse = eph.eclipse;
+    return 0;
+}
+
+int sim_env_init_ephem(sim_env_t *env, const sim_env_ephem_cfg_t *cfg)
+{
+    sim_env_init(env);
+    env->ephem_mode = 1;
+    env->start_unix = cfg->start_unix;
+    env->truth_igrf_order = cfg->truth_igrf_order;
+    if (adcs_orbit_load_tle(&env->orbit, cfg->tle1, cfg->tle2) != ADCS_ORBIT_OK) {
+        return -1;
+    }
+    return ephem_truth_update(env);
+}
+
 void sim_env_step(sim_env_t *env, double dt)
 {
     env->time_s += dt;
+
+    if (env->ephem_mode) {
+        /* A truth model failure invalidates the whole run: stop loudly */
+        if (ephem_truth_update(env) != 0) {
+            fprintf(stderr, "sim_env_step: truth ephemeris invalid at t=%.1f s\n",
+                    env->time_s);
+            abort();
+        }
+        return;
+    }
+
     double theta = ORBIT_OMEGA * env->time_s;
 
     /* Circular polar orbit propagation */
