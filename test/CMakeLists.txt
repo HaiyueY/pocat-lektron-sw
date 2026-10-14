@@ -91,8 +91,10 @@ add_test(NAME nadir             COMMAND test_nadir)
 add_test(NAME monte_carlo_30dps COMMAND test_monte_carlo 30 50 --seed 42)
 add_test(NAME monte_carlo_90dps COMMAND test_monte_carlo 90 50 --seed 42)
 add_test(NAME ephemeris         COMMAND test_ephemeris ${CMAKE_CURRENT_SOURCE_DIR}/data)
+add_test(NAME nadir_ephem       COMMAND test_nadir --ephem)
 
 set_tests_properties(mode_manager detumble nadir monte_carlo_30dps monte_carlo_90dps ephemeris
+                     nadir_ephem
     PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         ENVIRONMENT ADCS_TEST_NO_PLOT=1

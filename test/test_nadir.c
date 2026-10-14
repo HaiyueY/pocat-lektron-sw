@@ -9,6 +9,23 @@
  *
  * Uses full closed-loop simulation with TRIAD attitude determination,
  * magnetic control law, and simulated sensors/actuators.
+ *
+ * Usage: test_nadir [--ephem [--igrf-order N] [--start-hours H]] [--seed S]
+ *
+ *   (default)  legacy environment; the controller is given the true ECI
+ *              reference vectors (S1 regression case).
+ *   --ephem    truth environment from sim_env_init_ephem() (design TLE,
+ *              IGRF-14 degree 13, moving Sun, 2027-09-15). The controller
+ *              gets its reference vectors from adcs_ephem_update() with
+ *              degree N (default ADCS_IGRF_ORDER), exactly as on board,
+ *              so IGRF truncation errors enter the loop.
+ *              --start-hours shifts the start (and hence the ground
+ *              track) from the TLE epoch.
+ *   --seed     sensor-noise seed (default 42).
+ *
+ * The last output line is a machine-readable summary for sweep scripts:
+ *   SUMMARY pass=<0|1> ape=<fraction> mean_last_orbit=<deg> min=<deg> peak=<deg>
+ * where peak is the largest error after the first acquisition.
  */
 
 #include <stdio.h>
@@ -20,6 +37,7 @@
 #include "adcs_config.h"
 #include "adcs_math.h"
 #include "adcs_mode_manager.h"
+#include "adcs_ephemeris.h"
 #include "sim_environment.h"
 #include "sim_magnetometer.h"
 #include "sim_gyroscope.h"
@@ -71,6 +89,9 @@
 #else
 #define CSV_FILE    CSV_DIR "/nadir.csv"
 #endif
+
+/** IGRF degree of the truth field in --ephem mode */
+#define TRUTH_IGRF_ORDER  13
 
 /**
  * @brief Compute pointing error angle between body Z-axis and nadir.
@@ -126,13 +147,54 @@ static void attitude_step(quat_t *q, vec3d_t omega, double dt)
     *q = quat_normalize(*q);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    int ephem = 0;
+    int igrf_order = ADCS_IGRF_ORDER;
+    unsigned seed = 42;
+    double start_hours = 0.0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--ephem") == 0) {
+            ephem = 1;
+        } else if (strcmp(argv[i], "--igrf-order") == 0 && i + 1 < argc) {
+            igrf_order = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
+            seed = (unsigned)strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--start-hours") == 0 && i + 1 < argc) {
+            start_hours = atof(argv[++i]);
+        } else {
+            fprintf(stderr, "usage: %s [--ephem [--igrf-order N] [--start-hours H]] [--seed S]\n",
+                    argv[0]);
+            return 2;
+        }
+    }
+    if (igrf_order < 1 || igrf_order > 13) {
+        fprintf(stderr, "--igrf-order must be 1..13\n");
+        return 2;
+    }
+
+    char csv_file[128];
+    if (ephem) {
+        snprintf(csv_file, sizeof(csv_file), CSV_DIR "/nadir_ephem_n%d.csv", igrf_order);
+    } else if (seed != 42) {
+        snprintf(csv_file, sizeof(csv_file), CSV_DIR "/nadir_seed%u.csv", seed);
+    } else {
+        snprintf(csv_file, sizeof(csv_file), "%s", CSV_FILE);
+    }
+
     printf("=== ADCS Nadir Pointing Test ===\n");
     printf("Target: +Z body axis → nadir direction\n");
-    printf("Success criterion: pointing error < 20 deg (steady-state)\n\n");
+    printf("Success criterion: pointing error < 20 deg (steady-state)\n");
+    if (ephem) {
+        printf("Environment: truth = design TLE + IGRF-14 n=%d + moving Sun (2027-09-15)\n",
+               TRUTH_IGRF_ORDER);
+        printf("Controller references: adcs_ephem_update(), IGRF n=%d\n", igrf_order);
+        printf("Start: TLE epoch + %.2f h, noise seed %u\n\n", start_hours, seed);
+    } else {
+        printf("Environment: legacy (circular 400 km polar, tilted dipole, fixed Sun)\n\n");
+    }
 
-    srand(42);
+    srand(seed);
 
     adcs_state_t state = {0};
     adcs_mode_init(&state);
@@ -141,7 +203,23 @@ int main(void)
      * Body axes aligned with LVLH (body_z → nadir, body_x → velocity).
      * Body ω = orbit rate so attitude is stationary in LVLH frame. */
     sim_env_t env;
-    sim_env_init(&env);
+    adcs_orbit_t onboard_orbit;
+    if (ephem) {
+        sim_env_ephem_cfg_t cfg = {SIM_DESIGN_TLE1, SIM_DESIGN_TLE2,
+                                   0.0, TRUTH_IGRF_ORDER};
+        adcs_orbit_init(&onboard_orbit);
+        if (adcs_orbit_load_tle(&onboard_orbit, SIM_DESIGN_TLE1, SIM_DESIGN_TLE2) != ADCS_ORBIT_OK) {
+            printf("FAIL: on-board TLE rejected\n");
+            return 1;
+        }
+        cfg.start_unix = onboard_orbit.tle.epoch_unix + start_hours * 3600.0;
+        if (sim_env_init_ephem(&env, &cfg) != 0) {
+            printf("FAIL: truth environment could not be initialised\n");
+            return 1;
+        }
+    } else {
+        sim_env_init(&env);
+    }
     sim_gyro_state_t gyro_sim;
     sim_gyro_init(&gyro_sim);
 
@@ -170,9 +248,9 @@ int main(void)
 
     /* Open CSV for data logging */
     mkdir(CSV_DIR, 0755);
-    FILE *csv = fopen(CSV_FILE, "w");
+    FILE *csv = fopen(csv_file, "w");
     if (!csv) {
-        printf("WARNING: Could not open %s for writing\n", CSV_FILE);
+        printf("WARNING: Could not open %s for writing\n", csv_file);
     } else {
         fprintf(csv, "step,time_s,err_deg,omega_x,omega_y,omega_z,omega_mag,"
                       "dipole_x,dipole_y,dipole_z,"
@@ -190,6 +268,7 @@ int main(void)
     int first_convergence = 0;
     int nadir_acquisitions = 0;  /* times error crosses below threshold */
     int was_above = 1;           /* track threshold crossings */
+    double peak_after_acq = 0.0;   /* largest error after first acquisition [deg] */
     double ape_time_total = 0.0;   /* time since first acquisition [s] */
     double ape_time_within = 0.0;  /* ... of which error < APE_LIMIT_DEG [s] */
     double last_orbit_sum = 0.0;
@@ -223,12 +302,24 @@ int main(void)
         sim_gyro_read(&gyro_sim, omega_true, dt, &state.gyro);
         sim_photodiode_read(&env, q_true, &state.sun);
 
-        /* Provide ECI references */
-        state.b_field_eci = env.b_field_eci;
-        state.sun_eci = env.sun_eci;
-        state.nadir_eci = env.nadir_eci;
-        state.pos_eci = env.pos_eci;
-        state.vel_eci = env.vel_eci;
+        /* Provide ECI references: on-board models in --ephem mode,
+         * otherwise the truth itself (legacy regression case) */
+        if (ephem) {
+            adcs_ephem_t eph;
+            adcs_ephem_update(&onboard_orbit, env.unix_s, igrf_order, &eph);
+            if (adcs_ephem_to_state(&eph, &state) != 0) {
+                printf("FAIL: on-board ephemeris invalid (status 0x%02x) at t=%.0f s\n",
+                       eph.status, sim_time);
+                if (csv) fclose(csv);
+                return 1;
+            }
+        } else {
+            state.b_field_eci = env.b_field_eci;
+            state.sun_eci = env.sun_eci;
+            state.nadir_eci = env.nadir_eci;
+            state.pos_eci = env.pos_eci;
+            state.vel_eci = env.vel_eci;
+        }
         state.dt = dt;
 
         /* Run controller */
@@ -272,6 +363,7 @@ int main(void)
         }
 
         if (nadir_acquisitions > 0) {
+            if (err > peak_after_acq) peak_after_acq = err;
             ape_time_total += dt;
             if (err < APE_LIMIT_DEG) ape_time_within += dt;
         }
@@ -374,13 +466,18 @@ int main(void)
     /* Auto-generate plots (skipped when ADCS_TEST_NO_PLOT is set, e.g. ctest) */
     if (getenv("ADCS_TEST_NO_PLOT") == NULL) {
         printf("\nGenerating plots...\n");
-        int plot_rc = system("python3 ../plot_results.py nadir " CSV_FILE " " CSV_DIR "/");
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "python3 ../plot_results.py nadir %s " CSV_DIR "/", csv_file);
+        int plot_rc = system(cmd);
         if (plot_rc != 0) {
             printf("WARNING: Plot generation failed (python3 not found or script error)\n");
         } else {
             printf("Plots saved to %s/\n", CSV_DIR);
         }
     }
+
+    printf("SUMMARY pass=%d ape=%.4f mean_last_orbit=%.3f min=%.3f peak=%.3f\n",
+           pass, ape_fraction, mean_last_orbit, min_error, peak_after_acq);
 
     if (pass) return 0;
     else return 1;
