@@ -22,9 +22,6 @@
 #include "notifications.h"
 #include "task_management.h"
 
-#define ADCS_DETUMBLING_MODE (1 << 0)
-#define ADCS_NADIR_POINTING_MODE (1 << 1)
-
 /** @brief Notification bits deferred while the ADCS task is paused. */
 static uint32_t deferred_notifications;
 
@@ -67,11 +64,23 @@ static void process_adcs(void) {
     notificationValue |= deferred_notifications;
     deferred_notifications = 0;
 
-    if (notificationValue & ADCS_DETUMBLING_MODE) {
+    if (notificationValue & N_ADCS_NEW_CALIBRATION) {
+        // @todo S5: load the new calibration block from flash
+    }
+
+    if (notificationValue & N_ADCS_NEW_TLE) {
+        // @todo S5: load and validate the new TLE from flash
+    }
+
+    if (notificationValue & N_ADCS_DESIRED_STATE_IDLE) {
+        // @todo S4a: request IDLE (MTQ off, sensors still sampled)
+    }
+
+    if (notificationValue & N_ADCS_DESIRED_STATE_DETUMBLING) {
         detumble();
     }
 
-    if (notificationValue & ADCS_NADIR_POINTING_MODE) {
+    if (notificationValue & N_ADCS_DESIRED_STATE_NADIR) {
         point_to_nadir();
     }
 
