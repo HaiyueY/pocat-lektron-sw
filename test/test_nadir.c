@@ -52,6 +52,10 @@
 #define ERR_ENTER_HOLD   180.0
 #define ERR_EXIT_HOLD    181.0
 
+/** Mission APE requirement: error < 20° for ≥ 95% of the time */
+#define APE_LIMIT_DEG     20.0
+#define APE_MIN_FRACTION  0.95
+
 /** Physics sub-step for numerical stability */
 #define PHYSICS_DT  0.01
 
@@ -186,6 +190,8 @@ int main(void)
     int first_convergence = 0;
     int nadir_acquisitions = 0;  /* times error crosses below threshold */
     int was_above = 1;           /* track threshold crossings */
+    double ape_time_total = 0.0;   /* time since first acquisition [s] */
+    double ape_time_within = 0.0;  /* ... of which error < APE_LIMIT_DEG [s] */
     double last_orbit_sum = 0.0;
     int last_orbit_count = 0;
     const double last_orbit_start_time = SIM_TIME_LIMIT - 5540.0;
@@ -254,7 +260,7 @@ int main(void)
 
         if (err < min_error) min_error = err;
 
-        if (err < 20.0) {
+        if (err < APE_LIMIT_DEG) {
             steady_count++;
             if (was_above) {
                 nadir_acquisitions++;
@@ -263,6 +269,11 @@ int main(void)
         } else {
             steady_count = 0;
             was_above = 1;
+        }
+
+        if (nadir_acquisitions > 0) {
+            ape_time_total += dt;
+            if (err < APE_LIMIT_DEG) ape_time_within += dt;
         }
 
         if (sim_time >= last_orbit_start_time) {
@@ -306,11 +317,15 @@ int main(void)
 
     double mean_last_orbit = last_orbit_count > 0
                              ? last_orbit_sum / last_orbit_count : 180.0;
+    double ape_fraction = ape_time_total > 0.0
+                          ? ape_time_within / ape_time_total : 0.0;
 
     printf("\n--- Results ---\n");
     printf("Minimum pointing error:  %.2f deg\n", min_error);
     printf("Nadir acquisitions:      %d  (error crossed below 20°)\n",
            nadir_acquisitions);
+    printf("Within 20° after first acquisition: %.1f%% of %.0f s\n",
+           100.0 * ape_fraction, ape_time_total);
     printf("Mean error (last orbit): %.2f deg\n", mean_last_orbit);
     printf("Adaptive rate: hold steps=%ld (%.1f%%), fast steps=%ld (%.1f%%)\n",
            hold_steps, 100.0*hold_steps/(hold_steps+fast_steps),
@@ -319,23 +334,26 @@ int main(void)
     /*
      * Pass criteria for magnetic-only B-cross control:
      *   1. Controller can find nadir: min_error < 10°
-     *   2. Repeatable convergence:    nadir_acquisitions >= 3
+     *   2. Mission APE:              error < 20° for ≥ 95% of the time
+     *                                after the first acquisition
      *   3. Stable pointing:          mean_last_orbit < 30°
      *
      * Orbit-period oscillation (~5-15°) is expected for magnetic-only
      * B-cross control (B-field rotates, controllability is intermittent).
      * Eclipse degrades TRIAD attitude estimation, causing temporary
-     * error peaks. The criteria verify that the controller repeatedly
-     * recovers and maintains mean pointing within 30° over the final orbit.
+     * error peaks. Criterion 2 used to be "≥ 3 acquisitions", which
+     * penalised a controller that acquires once and never leaves the
+     * 20° band; it now checks the APE requirement directly.
      */
+    int ape_ok = ape_fraction >= APE_MIN_FRACTION;
     int pass = (min_error < 10.0)
-            && (nadir_acquisitions >= 3)
+            && ape_ok
             && (mean_last_orbit < 30.0);
 
     if (pass) {
         printf("\nPASS: Nadir pointing test passed\n");
         printf("  ✓ min error %.2f° < 10°\n", min_error);
-        printf("  ✓ %d nadir acquisitions (≥ 3)\n", nadir_acquisitions);
+        printf("  ✓ APE %.1f%% within 20° (≥ 95%%)\n", 100.0 * ape_fraction);
         printf("  ✓ last-orbit mean %.2f° < 30°\n", mean_last_orbit);
     } else {
         printf("\nFAIL: Nadir pointing test failed\n");
@@ -343,10 +361,10 @@ int main(void)
             printf("  ✗ min error %.2f° ≥ 10°\n", min_error);
         else
             printf("  ✓ min error %.2f° < 10°\n", min_error);
-        if (nadir_acquisitions < 3)
-            printf("  ✗ %d nadir acquisitions (< 3)\n", nadir_acquisitions);
+        if (!ape_ok)
+            printf("  ✗ APE %.1f%% within 20° (< 95%%)\n", 100.0 * ape_fraction);
         else
-            printf("  ✓ %d nadir acquisitions (≥ 3)\n", nadir_acquisitions);
+            printf("  ✓ APE %.1f%% within 20° (≥ 95%%)\n", 100.0 * ape_fraction);
         if (mean_last_orbit >= 30.0)
             printf("  ✗ last-orbit mean %.2f° ≥ 30°\n", mean_last_orbit);
         else
