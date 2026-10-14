@@ -201,8 +201,14 @@ extern "C" {
  * ====================================================================== */
 
 /** IGRF-14 truncation degree used on board (1 = tilted dipole … 13 = full).
- *  See docs/adcs_orbit_env_models.md for the accuracy/cost trade study. */
-#define ADCS_IGRF_ORDER         13
+ *
+ *  Chosen by the S3 trade study (docs/adcs_orbit_env_models.md §5): the
+ *  smallest degree whose field-direction error vs degree 13 is ≤ 0.5° at
+ *  the 95th percentile over 450–550 km SSO orbits (n = 7: 0.25°, max 0.60°)
+ *  and whose closed-loop nadir APE is indistinguishable from degree 13.
+ *  Costs 35 of the 104 (n, m) terms. A tilted dipole (n = 1) is off by
+ *  21° at the 95th percentile. */
+#define ADCS_IGRF_ORDER         7
 
 /** TLE age beyond which ephemeris outputs are flagged ADCS_EPH_TLE_STALE [s].
  *  Reported only; the ADCS task decides what to do with it. */
