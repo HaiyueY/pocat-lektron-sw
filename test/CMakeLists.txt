@@ -22,6 +22,12 @@ set(ADCS_SOURCES
     ${ADCS_SRC_DIR}/adcs_determination.c
     ${ADCS_SRC_DIR}/adcs_nadir.c
     ${ADCS_SRC_DIR}/adcs_mode_manager.c
+    ${ADCS_SRC_DIR}/adcs_time.c
+    ${ADCS_SRC_DIR}/adcs_tle.c
+    ${ADCS_SRC_DIR}/adcs_sgp4.c
+    ${ADCS_SRC_DIR}/adcs_igrf.c
+    ${ADCS_SRC_DIR}/adcs_sun.c
+    ${ADCS_SRC_DIR}/adcs_ephemeris.c
 )
 
 # Simulator sources
@@ -68,6 +74,11 @@ add_executable(test_monte_carlo
     ${SIM_SOURCES}
 )
 
+add_executable(test_ephemeris
+    test_ephemeris.c
+    ${ADCS_SOURCES}
+)
+
 # --- Regression tests (ctest) ---
 # test_freq_sweep is a parameter-sweep tool, not a pass/fail test.
 
@@ -79,8 +90,9 @@ add_test(NAME detumble          COMMAND test_detumble)
 add_test(NAME nadir             COMMAND test_nadir)
 add_test(NAME monte_carlo_30dps COMMAND test_monte_carlo 30 50 --seed 42)
 add_test(NAME monte_carlo_90dps COMMAND test_monte_carlo 90 50 --seed 42)
+add_test(NAME ephemeris         COMMAND test_ephemeris ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
-set_tests_properties(mode_manager detumble nadir monte_carlo_30dps monte_carlo_90dps
+set_tests_properties(mode_manager detumble nadir monte_carlo_30dps monte_carlo_90dps ephemeris
     PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         ENVIRONMENT ADCS_TEST_NO_PLOT=1
