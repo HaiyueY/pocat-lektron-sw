@@ -18,7 +18,9 @@
  *
  * so only a handful of scalars are live at any time: stack use does not
  * depend on the degree and no (N+1)² table is needed (the reference
- * igrf13syn kept 29 KB on the stack).
+ * igrf13syn kept 29 KB on the stack). The square-root factors come from
+ * tables generated with the coefficients, so a term costs only
+ * multiply/adds — no sqrt or division in soft double.
  *
  * Near the poles sinθ is floored at 1e-10. Every m ≥ 1 term of B_φ carries
  * a factor sin^m θ, so the ratio stays exact; only an exact pole would
@@ -78,8 +80,7 @@ int adcs_igrf_field_ecef(vec3d_t r_ecef_m, double decimal_year, int n_max,
 
     for (int m = 0; m <= n_max; m++) {
         if (m >= 1) {
-            double f = (m == 1) ? 1.0
-                                : sqrt((2.0 * m - 1.0) / (2.0 * m));
+            double f = igrf14_pmm[m];
             double p_new  = f * sin_t * p_mm;
             double dp_new = f * (cos_t * p_mm + sin_t * dp_mm);
             p_mm = p_new;
@@ -100,9 +101,10 @@ int adcs_igrf_field_ecef(vec3d_t r_ecef_m, double decimal_year, int n_max,
 
         for (int n = m; n <= n_max; n++) {
             if (n > m) {
+                int kr = IGRF_INDEX(n, m);
                 double k1 = 2.0 * n - 1.0;
-                double k2 = sqrt((double)((n - 1) * (n - 1) - m * m));
-                double k3 = 1.0 / sqrt((double)(n * n - m * m));
+                double k2 = igrf14_k2[kr];
+                double k3 = igrf14_k3[kr];
                 p  = (k1 * cos_t * p1 - k2 * p2) * k3;
                 dp = (k1 * (cos_t * dp1 - sin_t * p1) - k2 * dp2) * k3;
                 ar_n *= ar;

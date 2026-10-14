@@ -3,7 +3,9 @@
 
 Only the 2025.0 main-field coefficients (n <= 13) and the 2025-2030 secular
 variation (n <= 8) are emitted; the flight model never needs the historical
-DGRF columns.
+DGRF columns. The square roots of the Legendre recursion are emitted as
+tables too, so the on-board synthesis needs no sqrt per term (soft double
+on the Cortex-M4).
 
 Usage (from the repository root):
     python3 scripts/adcs/gen_igrf14_coeffs.py \
@@ -13,6 +15,7 @@ Input source: https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt
 """
 
 import hashlib
+import math
 import sys
 
 SOURCE_URL = "https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt"
@@ -68,6 +71,27 @@ def table(name, values, nmax, ncoef):
     return "\n".join(lines)
 
 
+def double_table(name, values, comment):
+    lines = ["/** %s */" % comment,
+             "static const double %s[%d] = {" % (name, len(values))]
+    for i in range(0, len(values), 4):
+        lines.append("    " + ", ".join("%.17g" % v for v in values[i:i + 4]) + ",")
+    lines.append("};")
+    return "\n".join(lines)
+
+
+def recursion_tables(nmax, ncoef):
+    """Constants of the Schmidt semi-normalised recursion, see adcs_igrf.c."""
+    k2 = [0.0] * ncoef
+    k3 = [0.0] * ncoef
+    for n in range(1, nmax + 1):
+        for m in range(0, n):
+            k2[index(n, m)] = math.sqrt((n - 1) ** 2 - m ** 2)
+            k3[index(n, m)] = 1.0 / math.sqrt(n ** 2 - m ** 2)
+    pmm = [1.0, 1.0] + [math.sqrt((2 * m - 1) / (2 * m)) for m in range(2, nmax + 1)]
+    return k2, k3, pmm
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -83,6 +107,7 @@ def main():
 
     ncoef = index(NMAX, NMAX) + 1
     sv_ncoef = index(SV_NMAX, SV_NMAX) + 1
+    k2, k3, pmm = recursion_tables(NMAX, ncoef)
 
     text = f"""/**
  * @file adcs_igrf14_coeffs.h
@@ -115,6 +140,12 @@ def main():
 {table("igrf14_gsv", gsv, SV_NMAX, sv_ncoef)}
 
 {table("igrf14_hsv", hsv, SV_NMAX, sv_ncoef)}
+
+{double_table("igrf14_k2", k2, "sqrt((n-1)^2 - m^2) at k(n, m), n > m (0 on the diagonal)")}
+
+{double_table("igrf14_k3", k3, "1 / sqrt(n^2 - m^2) at k(n, m), n > m (0 on the diagonal)")}
+
+{double_table("igrf14_pmm", pmm, "sqrt((2m-1)/(2m)) for m >= 2; 1 for m = 0, 1 (P_1^1 = sin(theta))")}
 
 #endif /* ADCS_IGRF14_COEFFS_H */
 """
