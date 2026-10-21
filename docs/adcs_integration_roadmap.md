@@ -1,6 +1,6 @@
 # ADCS 集成路线图 — pocat-lektron-sw
 
-> 状态：草案 · 2026-10-14 · S1 已完成（上板一项待硬件）· S3 已完成（DWT 周期实测待硬件）
+> 状态：草案 · 2026-10-21 · S1 已完成（上板一项待硬件）· S3 已完成（DWT 周期实测待硬件）· S2a 已完成（S2b 上板验证待硬件）
 > 目标：把 `src/subsystems/adcs/` 中已在主机仿真里验证过的 ADCS 算法完整接入 FreeRTOS 飞控软件，并在 FlatSat / 亥姆霍兹线圈上完成验收。
 
 已验证的算法（主机仿真，`test/`）：
@@ -27,9 +27,9 @@
 | 1 | ~~`obc.c` 残留冲突标记，来自 2026-06-01 合并 `9385c52`~~ **S1 已解决**：合并上游 `15a4761`，`obc.c` 逐字取上游版本（ADCS 的建/复位/健康登记由 `task_management.c` 负责） | `src/subsystems/obc/obc.c` | S1 |
 | 2 | `adcs.c` 自定义 `bit0=DETUMBLE, bit1=NADIR`，与 `notifications.h` 的 `bit0=IDLE, bit1=DETUMBLING, bit2=NADIR` 冲突（**S1 已改用 `N_ADCS_*`**）；`adcs_task` 只是空壳（S4） | `src/subsystems/adcs/adcs.c:25-26`<br>`include/utils/notifications.h:25-29` | S1 / S4 |
 | 3 | ~~开发机上没有 `arm-none-eabi-gcc`~~ **S1 已解决**：Arm GNU Toolchain 14.3.Rel1 装在 `~/opt/`，固件已在本机编译通过；`st-flash` 仍未装（等硬件） | — | S1 |
-| 4 | **当前 ADCS 板 `PQ_ADCS_HBridge` 使用 4×DRV8214 H 桥**，固件与仿真仍按旧板 BD2606MVV 建模；头文件写 0.5–32 mA，`adcs_config.h` 写 150 mA | `../pocat-hw/README.md`<br>`include/subsystems/adcs/adcs_magnetorquer.h:6`<br>`include/subsystems/adcs/adcs_config.h:78-80` | S2（回灌算法） |
-| 5 | ADCS 所有 I²C 器件（IIM-42652、MMC5983MA@0x30、4×DRV8214）挂在 **SDA3/SCL3**；CSS = TMUX1108（`SEL_PH0..2`）+ 单路 `ADC_PH`；板供电由 `PoL_ADCS_POWER_EN` 控制 | ADCS / OBC 原理图 global labels | S2 |
-| 6 | `HAL_I2C_MODULE_ENABLED` 被注释；`.ioc`（2026-09-30）中没有 I2C3，落后于 2026-10-09 的 OBC 原理图；`periph_reconfigure_for_freq()` 不处理 I²C；ADC1 被 `temperature.c` 无锁使用 | `include/core/stm32l4xx_hal_conf.h:43`<br>`src/utils/periph.c:52-76`<br>`src/utils/temperature.c` | S2 |
+| 4 | ~~当前 ADCS 板使用 4×DRV8214，固件与仿真仍按 BD2606MVV 建模~~ **S2 已解决**：实际是 **3 片** DRV8214（每轴一片），每轴两只线圈串联，3.3 V 电压调节开环驱动。线圈 R 和 N·A 由 PCB 走线算出：X/Z 43.3 Ω、Y 34.3 Ω，最大电流 71/90 mA，**最大磁矩约为旧值 150 mA 时的一半**；Y 轴 coil factor 从 0.056 改为 0.080。量化与仿真均已更新 | `docs/adcs_hw_interface.md` §4 | S2 |
+| 5 | ADCS 的 I²C 器件挂在 SDA3/SCL3（PC0/PC1）；CSS = TMUX1108（PC2/PA11/PA12）+ `ADC_PH`（PC5 = ADC12_IN14）。**`PoL_ADCS_POWER_EN`（PA7）只接 DRV8214 的 nSLEEP，传感器常电**。**X 轴 DRV8214 的地址 0x30 与 MMC5983MA 冲突（硬件 bug，需改板）**。没有中断/故障线，全部轮询。详见 ICD §1–§3 | `docs/adcs_hw_interface.md` | S2 / 硬件 |
+| 6 | ~~`HAL_I2C_MODULE_ENABLED` 被注释；`periph_reconfigure_for_freq()` 不处理 I²C；ADC1 被 `temperature.c` 无锁使用~~ **S2 已解决**：启用 I2C3（按频率设置 TIMINGR）；CSS 改用专用的 ADC2，不再与 ADC1 共用。`.ioc` 仍落后于原理图（交硬件负责人，ICD H5） | `src/utils/periph.c`<br>`src/utils/i2c_bus.c` | S2 |
 | 7 | MCU 只有单精度 FPU（`fpv4-sp-d16`），ADCS 全部用 `double` → 软浮点。S3 估算参考矢量更新约 0.2 M 周期/次（2 MHz 下约 100 ms），IGRF 递推中的开方已改为查表；实测待 `ADCS_BENCH` | `CMakeLists.txt:16-20`<br>`docs/adcs_resource_budget.md` S3 节 | S3 / S4 |
 | 8 | ~~参考 IGRF 为 IGRF-13（有效期到 2025），发射在 2027 Q3 → 需 IGRF-14；`igrf13()` 把 29 KB 的 `double gh[3645]` 放在**局部变量**（ADCS 栈仅 4 KB）；`igrf13.h` 声明 `igrf13_ngdc`，实现叫 `igrf12_ngdc`；`sgp4.c` 使用全局可变量 + `printf`~~ **S3 已解决**：新写 `adcs_sgp4`（Vallado，WGS-72）、`adcs_igrf`（IGRF-14，栈占用与阶数无关）、`adcs_tle`、`adcs_sun`、`adcs_ephemeris`；`reference/ADCS/` 保持不动 | `src/subsystems/adcs/adcs_{sgp4,igrf,tle,sun,ephemeris}.c`<br>`docs/adcs_orbit_env_models.md` | S3 |
 | 9 | RTC 失去备份后复位到 2000-01-01，系统中没有“时间有效”概念。**时间有效性不归 ADCS**（2026-10-14 决定），由 OBC/OBDH 负责；ADCS 直接使用 `time_get_unix()` | `src/utils/periph.c:298-336` | OBC / OBDH |
@@ -44,6 +44,9 @@
 | 18 | 飞控端 `adcs_mode_init()` 只初始化 `mode`、计数器和 `dt`，其余字段（陀螺、磁强计、估计量）未定义；主机测试曾因此在 detumble 第 0 步得到 NaN（测试已改为零初始化） | `src/subsystems/adcs/adcs_mode_manager.c:28` | S4a |
 | 19 | `determination_update()` 的阴影分支用 `b_field_eci_prev` 求 dB/dt，但这个字段从未被更新（只在 `nadir_init()` 中清零）。目前 `nadir_step()` 只在有日照时调用该函数，所以这个分支不可达；以后启用前必须先补上更新 | `src/subsystems/adcs/adcs_determination.c:107-141`<br>`src/subsystems/adcs/adcs_nadir.c:51` | S4a |
 | 20 | `nadir_init()` 把姿态估计置为单位四元数；如果在阴影中进入 nadir，第一次日照 TRIAD 之前只有从这个任意初值出发的陀螺传播，此时的“捕获”没有意义。S3 闭环中 10 个工况有 4 个在阴影中开始，捕获后又偏离到 24–69° | `src/subsystems/adcs/adcs_nadir.c:55`<br>`docs/adcs_orbit_env_models.md` §7.1 | S4a |
+| 21 | 星上没有由 6 路 CSS 电压求太阳矢量和 `sun_visible` 的代码：加权法向的估计只在 `test/sim/sim_photodiode.c` 中，HAL 只提供电压 | `src/subsystems/adcs/adcs_hal_board.c` | S4a |
+| 22 | `DETUMBLE_DEAD_TIME_S` = 3.5 ms 偏小：MMC5983MA 一次 SET/RESET 读场约 18 ms（BW = 100 Hz），再加陀螺与 CSS 读数 | `include/subsystems/adcs/adcs_config.h`<br>`docs/adcs_hw_interface.md` §6 | S4a |
+| 23 | `periph_reconfigure_for_freq()` 重新初始化 I2C3/ADC2 时不取 `i2c_bus` 的锁，换频期间如果 ADCS 正在传输会出错 | `src/utils/periph.c` | S4b（与 OBC 对齐） |
 
 ---
 
@@ -86,26 +89,29 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 ### S2 BSP 与驱动
 
-目标硬件：**`PQ_ADCS_HBridge`（DRV8214）板**（已确认）。
+目标硬件：**`PQ_ADCS_HBridge`（DRV8214）板**（已确认）。接口、驱动与硬件问题清单见 `docs/adcs_hw_interface.md`。
+
+没有硬件，所以 S2 分成 **S2a**（代码具备、能编译，2026-10-21 完成）和 **S2b**（上板验证）。按决定（2026-10-21）先解决"有无"：驱动主机单元测试、`--adcs-hwtest` 上板测试固件、线圈 R 偏差扫描推迟到测试阶段。
 
 **任务**
 
-- **冻结引脚表。** 从 OBC 原理图网表确认 `SCL3/SDA3`（推测 PC0/PC1，AF4，需核实）、`SEL_PH0..2`、`ADC_PH` 对应的 ADC 通道、`PoL_ADCS_POWER_EN`；同步更新 `.ioc` 与 `src/utils/periph.c`。
-- **I²C3。** 启用 HAL I2C；在 `periph_reconfigure_for_freq()` 中加入 I²C TIMINGR（80 / 8 / 2 MHz）；实现超时、错误计数、总线锁死恢复（9 个 SCL 脉冲），必要时经 PoL 给 ADCS 板断电重启。
-- **驱动**（每个器件一个文件，放在 `src/subsystems/adcs/drivers/`）：
-  - **MMC5983MA**：SET/RESET 消磁、单次测量触发、温度读取、传感器轴 → 本体系旋转。
-  - **IIM-42652**：量程 ≥ ±250 dps（覆盖 90°/s 设计工况）、ODR、LPF、温度读取。
-  - **CSS**：TMUX1108 通道切换 + LPV542 建立时间延迟 + ADC 采样；ADC1 加互斥（与 `temperature.c` 共用）。
-  - **DRV8214 ×4**：确认线圈↔驱动器映射（4 个驱动器对应 3 轴）、I²C 地址、控制方式（I²C 桥控 vs PWM 引脚）、电流调节分辨率与上限。
-- **HAL 抽象。** 沿用 `mtq_apply_command()` 的 weak 符号模式，定义 `adcs_hal.h`（读 mag / gyro / CSS、写 MTQ、电源开关）。目标板链接真实实现，`test/` 链接仿真实现。
-- **校准数据结构。** 定义 `adcs_calib_t`（磁强计硬/软铁矩阵 + 偏置、陀螺零偏/温度多项式、光电二极管偏置），作为 S5 上传的目标格式。
-- **回灌算法。** 用 DRV8214 的实际分辨率更新 `MTQ_*_INTENSITY_*` 与 `sim_mtq_driver.c`，重跑 nadir 与 Monte Carlo。
+- [x] **冻结引脚表。** 从 OBC 原理图与 PCB 网表确认：SCL3/SDA3 = PC0/PC1（AF4），SEL_PH0..2 = PC2/PA11/PA12，ADC_PH = PC5（ADC12_IN14），PoL_ADCS_POWER_EN = PA7。`.ioc` 不由 ADCS 修改（ICD H5）。
+- [x] **I²C3。** 启用 HAL I2C；按 80 / 8 / 2 MHz 设置 TIMINGR，并在 `periph_reconfigure_for_freq()` 中重设。`i2c_bus`：互斥、10 ms 超时、按地址计错、9 个 SCL 时钟 + STOP 的锁死恢复。PoL 只控制 DRV8214 的 nSLEEP，**不能给传感器断电**。
+- [x] **驱动**（`src/subsystems/adcs/drivers/`，只依赖 `adcs_bus.h`，不依赖 STM32）：
+  - **MMC5983MA**：单次测量 18 bit，用 SET/RESET 对消除偏置，读温度，检查产品 ID。传感器轴 → 本体系的转换放在 `adcs_calib_t`。
+  - **IIM-42652**：只开陀螺，±250 dps，ODR 100 Hz，低通 10 Hz，读温度。
+  - **CSS**：TMUX1108 依次切换通道，以 S7（GND）作为零点；改用**专用 ADC2**，不再需要与 `temperature.c` 互斥。
+  - **DRV8214 ×3**（不是 4 片）：只能 I²C 桥控，使用电压调节（8 bit，15.37 mV/LSB），关闭电流调节和失速检测，故障轮询读取。**X 轴地址与 MMC5983MA 冲突，改板前固件不访问 X 轴驱动**。
+- [x] **HAL 抽象。** `adcs_hal.h` 提供本体系的校准读数和 MTQ 电源开关，MTQ 输出沿用 `mtq_apply_command()`（板级实现为强符号）。板级实现是 `adcs_hal_board.c`。没有为 HAL 再加 weak 默认实现：主机测试不调用 HAL，PIL（S4）需要时再加。
+- [x] **校准数据结构。** `adcs_calib_t`：磁强计硬铁 + 软铁 + 安装旋转，陀螺零偏 + 一阶温度系数 + 安装旋转，CSS 偏置/增益，线圈 R 与温度系数；带版本号、长度和 CRC 字段（CRC 的计算放在 S5）。
+- [x] **回灌算法。** 线圈 R 和 N·A 由 PCB 走线算出（`scripts/adcs/coil_from_pcb.py`），按轴设置步长与上限。`sim_mtq_driver.c` 按 code → 电流 → 磁矩的路径仿真，预留 R 误差注入。`ctest` 7/7 通过（未调参），前后对比见 ICD §7。
 
 **出口准则**
 
-- [ ] 裸机/单任务测试固件稳定采集 ≥ 1 h，I²C 错误率有记录
-- [ ] 轴向与极性验证表：转动板子核对符号；单轴通电，用外部磁强计/罗盘核对极性
-- [ ] 新量化模型下 `test_nadir` 仍满足 APE < 20°（95% 时间）
+- [ ] **S2b**：裸机/单任务测试固件稳定采集 ≥ 1 h，I²C 错误率有记录
+- [ ] **S2b**：轴向与极性验证表：转动板子核对符号；单轴通电，用外部磁强计/罗盘核对极性；用万用表实测线圈 R
+- [x] 新量化模型下 `test_nadir` 仍满足 APE < 20°（95% 时间）：100%，末轨均值 3.39°（ICD §7）
+- [ ] **硬件**：X 轴 DRV8214 地址改板（ICD H1）
 
 ### S3 轨道与环境模型
 
@@ -203,11 +209,11 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 | # | 风险 | 缓解 |
 |---|------|------|
-| 1 | MTQ 硬件模型不一致（DRV8214 vs BD2606MVV），现有 3.6° / 18° 结论可能变化 | S2 开始时先在仿真中建立 DRV8214 量化模型 |
+| 1 | MTQ 硬件模型不一致（DRV8214 vs BD2606MVV），现有 3.6° / 18° 结论可能变化 | **S2 已缓解**：DRV8214 模型（PCB 线圈参数）下 nadir APE 100%、消旋更快；开环 R(T) 增益误差（约 ±25%）的扫描推迟到测试阶段 |
 | 2 | IGRF-13 已过期，发射在 2027 Q3 | **S3 已缓解**：使用 IGRF-14（有效至 2030） |
 | 3 | 双精度软浮点在低主频状态下的 CPU 开销 | S3 估算约 0.2 M 周期/次（2 MHz 下约 100 ms），IGRF 开方已查表；S4 用 DWT 实测；必要时先降低参考矢量的更新频率，只在测量证明必要时才把 IGRF/控制改为 `float` |
 | 4 | RTC 失效时用错误时间算参考矢量，导致错误指向 | 时间有效性由 OBC/OBDH 负责（ADCS 不处理，2026-10-14 决定）；授时 TC |
-| 5 | 6 个器件共享一条 I²C3，总线锁死会让 ADCS 全部失明 | 超时 + 9 脉冲恢复 + PoL 断电重启 |
+| 5 | 5 个 ADCS 器件和侧板温度传感器共享一条 I²C3，总线锁死会让 ADCS 全部失明 | 超时 + 9 个 SCL 时钟恢复（S2 已实现）。**PoL 只控制 DRV8214 的 nSLEEP，无法给传感器断电重启**（2026-10-21 原理图核查），所以恢复只能靠时钟；如需断电手段，要向硬件负责人提出 |
 | 6 | 星体剩磁和线圈对磁强计的污染 | 分时死区 + 整星亥姆霍兹校准 |
 | 7 | 依赖他人未完成的模块（EPS 电量、OBDH 历史遥测、TC ID 与地面站同步） | 尽早定义接口；ADCS 侧先用 TC 驱动测试 |
 
