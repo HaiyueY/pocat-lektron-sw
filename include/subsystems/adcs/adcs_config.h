@@ -52,34 +52,53 @@ extern "C" {
  * Magnetorquer Parameters
  * ====================================================================== */
 
-/** Maximum magnetic dipole per axis [A·m²]
- *  Source: docs/Max_mag_moment_calc.m (spiral coil geometry + dual coils)
- *  Each axis has 2 coils (opposite faces), wired to produce additive moment.
- *  Lateral (X,Z): IoA * Sx = 150mA × 0.106306 m² = 15.946e-3 A·m²
- *  Top     (Y):   IoA * Sy = 150mA × 0.056065 m² =  8.410e-3 A·m² */
-#define MTQ_MAX_DIPOLE_X    15.946e-3
-#define MTQ_MAX_DIPOLE_Y     8.410e-3
-#define MTQ_MAX_DIPOLE_Z    15.946e-3
-
-/** Magnetorquer coil parameters for dipole↔intensity conversion
- *  dipole = intensity * coil_factor  →  intensity = dipole / coil_factor
- *  Constraint: MTQ_MAX_DIPOLE = MTQ_MAX_INTENSITY_A × MTQ_COIL_FACTOR
+/** Magnetorquer coils (PQ_ADCS_HBridge board, one DRV8214 per axis).
  *
- *  Source: docs/Max_mag_moment_calc.m
- *    coil_factor = Σ(Nlayers × side_i²) × N_coils_per_axis
- *    Lateral: 35 turns, L=32.3mm, d=0.22mm, w=0.22mm, 4 layers, ×2 coils
- *    Top:     29 turns, L=26.2mm, d=0.20mm, w=0.25mm, 4 layers, ×2 coils */
-#define MTQ_COIL_FACTOR_X   0.106306  /**< 15.946e-3 / 0.150 = Sx×2 [turns·m²] */
-#define MTQ_COIL_FACTOR_Y   0.056065  /**<  8.410e-3 / 0.150 = Sy×2 [turns·m²] */
-#define MTQ_COIL_FACTOR_Z   0.106306  /**< 15.946e-3 / 0.150 = Sz×2 [turns·m²] */
+ *  Each axis is two PCB-etched coils in series on opposite faces:
+ *    X, Z: two lateral boards (PQ_Lat_Board)
+ *    Y:    PQ_MagYBoard (+Y) and PQ_BotBoard (−Y), which differ in size
+ *  R and N·A per coil come from the board copper (35 µm, 20 °C) via
+ *  scripts/adcs/coil_from_pcb.py:
+ *    PQ_Lat_Board  21.66 Ω  0.052935 m²
+ *    PQ_BotBoard   21.81 Ω  0.052255 m²
+ *    PQ_MagYBoard  12.49 Ω  0.028066 m²
+ *  The lateral and +Y values agree with docs/Max_mag_moment_calc.m to
+ *  0.4 %; that script assumed two +Y-size coils on Y, which the board
+ *  does not have. TBC by measurement in S2b.
+ *
+ *  dipole = intensity × coil_factor, coil_factor = Σ N·A [turns·m²] */
+#define MTQ_COIL_FACTOR_X   0.105870  /**< 2 × 0.052935 */
+#define MTQ_COIL_FACTOR_Y   0.080321  /**< 0.028066 + 0.052255 */
+#define MTQ_COIL_FACTOR_Z   0.105870  /**< 2 × 0.052935 */
 
-/** Driver current limits [mA]
- *  Source: docs/Max_mag_moment_calc.m → IomA = 150 mA
- *  TBC in S2: these values predate the PQ_ADCS_HBridge board (4× DRV8214);
- *  re-derive range and step from the DRV8214 current regulation. */
-#define MTQ_MIN_INTENSITY_MA    0.5
-#define MTQ_MAX_INTENSITY_MA    150.0
-#define MTQ_INTENSITY_STEP_MA   0.5
+/** Coil resistance per axis at 20 °C [Ω] (series pair, as above) */
+#define MTQ_COIL_R_OHM_X    43.32
+#define MTQ_COIL_R_OHM_Y    34.30
+#define MTQ_COIL_R_OHM_Z    43.32
+
+/** DRV8214 voltage regulation (REG_CTRL = 11b, VM_GAIN_SEL = 1b).
+ *  The bridge regulates the coil terminal voltage to WSET_VSET × LSB,
+ *  0–3.92 V in 255 steps (datasheet SLVSH04 Table 8-23). The coils run
+ *  open loop: current = V / R, so R(T) is a gain error (copper
+ *  +0.39 %/K). VM is 3V3_PERM; the setpoint is capped below VM to keep
+ *  headroom for the bridge (≈0.6 Ω HS + LS) and rail tolerance. */
+#define MTQ_VSET_LSB_V      (3.92 / 255.0)  /**< ≈ 15.37 mV per code */
+#define MTQ_VSET_MAX_CODE   201             /**< 3.09 V of 3.3 V VM */
+
+/** Current per code and maximum current per axis [mA] */
+#define MTQ_INTENSITY_STEP_MA_X (MTQ_VSET_LSB_V / MTQ_COIL_R_OHM_X * 1.0e3)
+#define MTQ_INTENSITY_STEP_MA_Y (MTQ_VSET_LSB_V / MTQ_COIL_R_OHM_Y * 1.0e3)
+#define MTQ_INTENSITY_STEP_MA_Z (MTQ_VSET_LSB_V / MTQ_COIL_R_OHM_Z * 1.0e3)
+#define MTQ_MAX_INTENSITY_MA_X  (MTQ_VSET_MAX_CODE * MTQ_INTENSITY_STEP_MA_X)
+#define MTQ_MAX_INTENSITY_MA_Y  (MTQ_VSET_MAX_CODE * MTQ_INTENSITY_STEP_MA_Y)
+#define MTQ_MAX_INTENSITY_MA_Z  (MTQ_VSET_MAX_CODE * MTQ_INTENSITY_STEP_MA_Z)
+
+/** Maximum magnetic dipole per axis [A·m²]
+ *  X, Z ≈ 71.3 mA × 0.1059 ≈ 7.55e-3;  Y ≈ 90.1 mA × 0.0803 ≈ 7.24e-3.
+ *  (The BD2606MVV-era model assumed 150 mA: 15.9e-3 / 8.4e-3.) */
+#define MTQ_MAX_DIPOLE_X    (MTQ_MAX_INTENSITY_MA_X * 1.0e-3 * MTQ_COIL_FACTOR_X)
+#define MTQ_MAX_DIPOLE_Y    (MTQ_MAX_INTENSITY_MA_Y * 1.0e-3 * MTQ_COIL_FACTOR_Y)
+#define MTQ_MAX_DIPOLE_Z    (MTQ_MAX_INTENSITY_MA_Z * 1.0e-3 * MTQ_COIL_FACTOR_Z)
 
 /* =========================================================================
  * Detumbling Mode Parameters

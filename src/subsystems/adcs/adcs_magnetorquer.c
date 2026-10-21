@@ -2,18 +2,20 @@
  * @file adcs_magnetorquer.c
  * @brief Magnetorquer dipole-to-intensity conversion and quantization.
  *
- * Implements the BD2606MVV driver command pipeline:
+ * Implements the DRV8214 (voltage regulation) command pipeline:
  *   dipole → clamp → intensity → first-order Σ-Δ dither → recompute dipole
+ * The driver sets the coil voltage in steps of MTQ_VSET_LSB_V, so the
+ * addressable currents are integer multiples of a per-axis step
+ * MTQ_INTENSITY_STEP_MA_{X,Y,Z} = LSB / R (≈0.35 mA X/Z, ≈0.45 mA Y).
  *
  * MATLAB reference:
  *   Detumbling.m  L144-184  (intensity quantization loop)
  *   Nadir_pointing.m L196-238 (same quantization scheme)
  *
  * Σ-Δ dithering rationale (this file's only deviation from MATLAB):
- *   The driver hardware can only output current at multiples of
- *   MTQ_INTENSITY_STEP_MA (0.5 mA), with everything below
- *   MTQ_MIN_INTENSITY_MA (also 0.5 mA) snapped to zero — i.e. there
- *   is a true deadband.  The MATLAB reference paper [1] solves this
+ *   The driver hardware can only output current at multiples of the
+ *   per-axis step, with everything below one step snapped to zero —
+ *   i.e. there is a true deadband.  The MATLAB reference paper [1] solves this
  *   for nadir-pointing by using a "fixed" magnetorquer model with PWM
  *   to time-average sub-step commands.  We implement the same idea as
  *   a per-axis 1st-order Σ-Δ noise-shaping accumulator: the residual
@@ -51,6 +53,20 @@ static const double max_dipole[3] = {
     MTQ_MAX_DIPOLE_Z
 };
 
+/* Addressable current step per axis [mA] (one DRV8214 voltage code) */
+static const double intensity_step[3] = {
+    MTQ_INTENSITY_STEP_MA_X,
+    MTQ_INTENSITY_STEP_MA_Y,
+    MTQ_INTENSITY_STEP_MA_Z
+};
+
+/* Maximum current per axis [mA] (MTQ_VSET_MAX_CODE steps) */
+static const double max_intensity[3] = {
+    MTQ_MAX_INTENSITY_MA_X,
+    MTQ_MAX_INTENSITY_MA_Y,
+    MTQ_MAX_INTENSITY_MA_Z
+};
+
 /* Per-axis Σ-Δ accumulators [mA], persistent across calls.
  * Bounded by |accumulator| <= step/2 in steady state. */
 static double sigma_delta_accumulator[3] = {0.0, 0.0, 0.0};
@@ -68,22 +84,23 @@ void mtq_reset_accumulator(void)
  *   q = round(target / step) * step  (nearest addressable level)
  *   accumulator = target - q         (carry residual forward)
  *
- * Deadband (output < MIN) is enforced naturally because MIN == step
- * for this hardware: q is always either 0 or |q| >= step = MIN.
+ * Deadband (output < one step) is enforced naturally: q is always
+ * either 0 or |q| >= step.
  *
  * Saturation: if |target| would exceed MAX, the accumulator stops
  * winding up (anti-windup) so it doesn't take many cycles to
  * recover after a saturated command.
  */
-static double sigma_delta_step(double raw_ma, double *accumulator)
+static double sigma_delta_step(double raw_ma, double step_ma, double max_ma,
+                               double *accumulator)
 {
     double target = raw_ma + *accumulator;
 
     /* Anti-windup saturation: clamp target before quantizing */
-    if (target > MTQ_MAX_INTENSITY_MA) target = MTQ_MAX_INTENSITY_MA;
-    if (target < -MTQ_MAX_INTENSITY_MA) target = -MTQ_MAX_INTENSITY_MA;
+    if (target > max_ma) target = max_ma;
+    if (target < -max_ma) target = -max_ma;
 
-    double q = round(target / MTQ_INTENSITY_STEP_MA) * MTQ_INTENSITY_STEP_MA;
+    double q = round(target / step_ma) * step_ma;
 
     /* Update accumulator with the unrounded residual.  When raw is
      * sub-step, target eventually walks across the step boundary and
@@ -115,6 +132,8 @@ void mtq_compute_command(vec3d_t desired_dipole, mtq_command_t *cmd)
     /* Step 3: 1st-order Σ-Δ dither: time-average sub-step commands */
     for (i = 0; i < 3; i++) {
         intensity_arr[i] = sigma_delta_step(intensity_arr[i],
+                                            intensity_step[i],
+                                            max_intensity[i],
                                             &sigma_delta_accumulator[i]);
     }
 
@@ -130,6 +149,15 @@ void mtq_compute_command(vec3d_t desired_dipole, mtq_command_t *cmd)
     cmd->intensity_ma.x = intensity_arr[0];
     cmd->intensity_ma.y = intensity_arr[1];
     cmd->intensity_ma.z = intensity_arr[2];
+}
+
+int mtq_intensity_to_code(int axis, double intensity_ma)
+{
+    long code = lround(intensity_ma / intensity_step[axis]);
+
+    if (code > MTQ_VSET_MAX_CODE) code = MTQ_VSET_MAX_CODE;
+    if (code < -MTQ_VSET_MAX_CODE) code = -MTQ_VSET_MAX_CODE;
+    return (int)code;
 }
 
 /* Default implementation: no-op (overridden by HAL or simulator) */
