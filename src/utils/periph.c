@@ -4,8 +4,9 @@
  * @details
  * Defines the global STM32 HAL peripheral handles declared in periph.h and
  * centralizes board peripheral initialization. The module initializes GPIO,
- * TIM5, TIM2, SPI2, IWDG, UART4, RTC, and ADC1, and provides reconfiguration
- * for peripherals whose timing depends on the selected system clock.
+ * TIM5, TIM2, SPI2, IWDG, UART4, RTC, ADC1, I2C3 and ADC2, and provides
+ * reconfiguration for peripherals whose timing depends on the selected
+ * system clock.
  * @author Guillermo O'Tuama Pascual
  * @date 2026-01-20
  */
@@ -24,10 +25,13 @@ UART_HandleTypeDef huart4;
 IWDG_HandleTypeDef hiwdg;
 RTC_HandleTypeDef hrtc;
 ADC_HandleTypeDef hadc1;
+I2C_HandleTypeDef hi2c3;
+ADC_HandleTypeDef hadc2;
 
 static uint32_t tim5_prescaler_for_freq(ClockFreq_t freq);
 static uint32_t spi2_prescaler_for_freq(ClockFreq_t freq);
 static uint32_t adc1_prescaler_for_freq(ClockFreq_t freq);
+static uint32_t i2c3_timing_for_freq(ClockFreq_t freq);
 static void periph_gpio_init(void);
 static void periph_tim2_init(void);
 static void periph_tim5_init(ClockFreq_t freq);
@@ -36,6 +40,8 @@ static void periph_iwdg_init(void);
 static void periph_uart4_init(void);
 static void periph_rtc_init(void);
 static void periph_adc1_init(ClockFreq_t freq);
+static void periph_i2c3_init(ClockFreq_t freq);
+static void periph_adc2_init(ClockFreq_t freq);
 
 void periph_init_for_freq(ClockFreq_t freq)
 {
@@ -47,6 +53,8 @@ void periph_init_for_freq(ClockFreq_t freq)
     periph_uart4_init();
     periph_rtc_init();
     periph_adc1_init(freq);
+    periph_i2c3_init(freq);
+    periph_adc2_init(freq);
 }
 
 void periph_reconfigure_for_freq(ClockFreq_t freq)
@@ -64,6 +72,9 @@ void periph_reconfigure_for_freq(ClockFreq_t freq)
         Error_Handler();
     }
 
+    /* ADC1 and ADC2 share the ADC clock and the common prescaler: take both
+     * down before bringing either back up. */
+    HAL_ADC_DeInit(&hadc2);
     HAL_ADC_DeInit(&hadc1);
     hadc1.Init.ClockPrescaler = adc1_prescaler_for_freq(freq);
     if (HAL_ADC_Init(&hadc1) != HAL_OK) {
@@ -72,6 +83,29 @@ void periph_reconfigure_for_freq(ClockFreq_t freq)
 
     if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
         Error_Handler();
+    }
+
+    hadc2.Init.ClockPrescaler = adc1_prescaler_for_freq(freq);
+    if (HAL_ADC_Init(&hadc2) != HAL_OK) {
+        Error_Handler();
+    }
+
+    if (HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED) != HAL_OK) {
+        Error_Handler();
+    }
+
+    HAL_I2C_DeInit(&hi2c3);
+    hi2c3.Init.Timing = i2c3_timing_for_freq(freq);
+    if (HAL_I2C_Init(&hi2c3) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+void periph_delay_us(uint32_t us)
+{
+    uint32_t start = __HAL_TIM_GET_COUNTER(&htim5);
+
+    while ((__HAL_TIM_GET_COUNTER(&htim5) - start) < us) {
     }
 }
 
@@ -127,15 +161,54 @@ static uint32_t adc1_prescaler_for_freq(ClockFreq_t freq)
 }
 
 /**
+ * @brief Select the I2C3 TIMINGR value for the configured system clock.
+ *
+ * I2C3 is clocked from PCLK1, which equals SYSCLK in every clock
+ * configuration. Fast mode (400 kHz) where the clock allows it, standard
+ * mode (≈100 kHz) at 2 MHz. Values from RM0351 §37.4.10 (8 MHz table) and
+ * CubeMX (80 MHz); the 2 MHz value is derived with the same constraints
+ * (PRESC = 0, SCLL = 10, SCLH = 8, SDADEL = 0, SCLDEL = 3 clock periods).
+ *
+ * @param freq System clock selection.
+ * @return I2C3 TIMINGR value.
+ */
+static uint32_t i2c3_timing_for_freq(ClockFreq_t freq)
+{
+    switch (freq) {
+        case CLK_FREQ_80MHZ: return 0x00702991u; /* 400 kHz */
+        case CLK_FREQ_8MHZ:  return 0x00310309u; /* 400 kHz */
+        case CLK_FREQ_2MHZ:  return 0x00200709u; /* ~100 kHz */
+        default:             return 0x00702991u;
+    }
+}
+
+/**
   * @brief GPIO Initialization Function
-  * @details Enables the GPIO port clocks required by board peripherals.
+  * @details Enables the GPIO port clocks required by board peripherals and
+  * configures the ADCS board control outputs (magnetorquer drivers asleep,
+  * sun-sensor mux on channel S1).
   * Radio control and interrupt pins are configured later by the RadioLib HAL.
   */
 static void periph_gpio_init(void)
 {
+    GPIO_InitTypeDef gpio = {0};
+
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    /* Drive the outputs low before enabling them: DRV8214 nSLEEP stays low */
+    HAL_GPIO_WritePin(ADCS_MTQ_EN_PORT, ADCS_MTQ_EN_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(ADCS_SEL_PH0_PORT, ADCS_SEL_PH0_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(ADCS_SEL_PH1_PORT, ADCS_SEL_PH1_PIN | ADCS_SEL_PH2_PIN, GPIO_PIN_RESET);
+
+    gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio.Pin = ADCS_MTQ_EN_PIN | ADCS_SEL_PH1_PIN | ADCS_SEL_PH2_PIN; /* all on GPIOA */
+    HAL_GPIO_Init(GPIOA, &gpio);
+    gpio.Pin = ADCS_SEL_PH0_PIN;
+    HAL_GPIO_Init(ADCS_SEL_PH0_PORT, &gpio);
 
      /* Radio GPIO pins (PC9/NRST, PA8/BUSY, PA10/DIO1, PB12/NSS) are
      configured by RadioLib through the HAL — do not touch them here. */
@@ -369,6 +442,72 @@ static void periph_adc1_init(ClockFreq_t freq)
     }
 
     if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * @brief I2C3 Initialization Function
+  * @details I2C3 (PC0 = SCL, PC1 = SDA) is the ADCS bus: MMC5983MA,
+  * IIM-42652, the DRV8214 magnetorquer drivers and the face-board TCN75A
+  * sensors. 7-bit addressing, analog filter on, no digital filter; the
+  * 4.7 kΩ pull-ups are on the OBC board.
+  * @param freq Current system clock selection.
+  */
+static void periph_i2c3_init(ClockFreq_t freq)
+{
+    hi2c3.Instance = I2C3;
+    hi2c3.Init.Timing = i2c3_timing_for_freq(freq);
+    hi2c3.Init.OwnAddress1 = 0;
+    hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c3.Init.OwnAddress2 = 0;
+    hi2c3.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+    hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+    if (HAL_I2C_Init(&hi2c3) != HAL_OK) {
+        Error_Handler();
+    }
+
+    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c3, I2C_ANALOGFILTER_ENABLE) != HAL_OK) {
+        Error_Handler();
+    }
+
+    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c3, 0) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * @brief ADC2 Initialization Function
+  * @details ADC2 samples the ADCS sun-sensor mux output ADC_PH (PC5,
+  * ADC12_IN14). It is kept separate from ADC1 so the sun sensors never
+  * contend with the MCU temperature readout. Same configuration as ADC1;
+  * the clock prescaler is common to both.
+  * @param freq Current system clock selection.
+  */
+static void periph_adc2_init(ClockFreq_t freq)
+{
+    hadc2.Instance = ADC2;
+    hadc2.Init.ClockPrescaler = adc1_prescaler_for_freq(freq);
+    hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+    hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
+    hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+    hadc2.Init.LowPowerAutoWait = DISABLE;
+    hadc2.Init.ContinuousConvMode = DISABLE;
+    hadc2.Init.NbrOfConversion = 1;
+    hadc2.Init.DiscontinuousConvMode = DISABLE;
+    hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+    hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+    hadc2.Init.DMAContinuousRequests = DISABLE;
+    hadc2.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+    hadc2.Init.OversamplingMode = DISABLE;
+    if (HAL_ADC_Init(&hadc2) != HAL_OK) {
+        Error_Handler();
+    }
+
+    if (HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED) != HAL_OK) {
         Error_Handler();
     }
 }

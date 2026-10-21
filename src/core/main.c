@@ -21,6 +21,7 @@
 #include "log.h"
 #include "time.h"
 #include "flash.h"
+#include "i2c_bus.h"
 
 /** @brief Handle for the OBC FreeRTOS task*/
 static TaskHandle_t obc_task_handle;
@@ -58,6 +59,7 @@ int main(void)
 
   log_init();
   time_init();
+  i2c_bus_init();
   printf("\r\n=======================\r\n pocat flight software\r\n=======================\r\n\r\n");
   
   printf("Boot state: %d\r\n", bootState);
