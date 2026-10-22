@@ -24,12 +24,18 @@
 #include "adcs_detumble.h"
 #include "adcs_nadir.h"
 #include "adcs_config.h"
+#include "adcs_math.h"
+#include <string.h>
 
 void adcs_mode_init(adcs_state_t *state)
 {
+    /* Sensor, estimate and command fields must start defined: the first
+     * detumble step reads mag/gyro before any sensor update could have
+     * been missed (S1 found a NaN from an uninitialised state). */
+    memset(state, 0, sizeof(*state));
     state->mode = ADCS_MODE_IDLE;
-    state->detumble_stable_count = 0;
-    state->step_count = 0;
+    state->q_eci_body = quat_identity();
+    state->q_triad_prev = quat_identity();
     state->dt = ADCS_CONTROL_DT;
 }
 

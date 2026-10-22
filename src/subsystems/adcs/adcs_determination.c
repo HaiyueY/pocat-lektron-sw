@@ -6,9 +6,8 @@
  * frame to body frame using two non-parallel vector pairs measured in
  * both frames.
  *
- * Two modes of operation:
- *   - Sun-visible: uses (B_ECI, Sun_ECI) and (B_body, Sun_body)
- *   - Eclipse:     uses (B_ECI, dB_ECI/dt) and (B_body, dB_body/dt + ω×B_body)
+ * Uses the (Sun, B) vector pairs, so it is only meaningful while the Sun
+ * is visible; eclipse attitude is propagated by nadir_step().
  *
  * MATLAB reference:
  *   ref/H-bridge-simulations/Simulation Nadir Pointing/Functions/triad.m
@@ -19,9 +18,7 @@
  *     L112-119: Sun-visible TRIAD (reference1=B_ECI, body1=B_body,
  *               reference2=Sun_ECI, body2=Sun_body)
  *               Called as triad(Sun_ECI, B_ECI, Sun_body, B_body)
- *     L126-140: Eclipse TRIAD (reference1=B_ECI, body1=B_body,
- *               reference2=dB_ECI/dt, body2=dB_body/dt + ω×B_body)
- *               Called as triad(dB_ECI/dt, B_ECI, dB_body_corr, B_body)
+ *     L126-140: Eclipse TRIAD on (B, dB/dt) — not implemented here
  *     L123-144: rotmatrix2quat → Shepperd's method (quat_from_matrix)
  */
 
@@ -93,57 +90,17 @@ void triad_compute(vec3d_t ref1, vec3d_t ref2,
 
 void determination_update(adcs_state_t *state)
 {
-    vec3d_t ref_primary, ref_secondary;
-    vec3d_t body_primary, body_secondary;
-
-    if (state->sun.sun_visible) {
-        /* Sun-visible mode
-         * Ref: Nadir_pointing.m L112-119
-         *   triad(Sun_ECI, B_ECI, Sun_body, B_body) */
-        ref_primary  = state->sun_eci;
-        ref_secondary = state->b_field_eci;
-        body_primary = state->sun.sun_body;
-        body_secondary = state->mag.field;
-    } else {
-        /* Eclipse mode
-         * Ref: Nadir_pointing.m L126-140
-         *   reference2 = (B_ECI - B_ECI_prev) / dT
-         *   body2 = dB_body/dt + ω × B_body
-         *   triad(dB_ECI/dt, B_ECI, body2, B_body) */
-        double dt = state->dt;
-
-        /* ECI magnetic field derivative */
-        vec3d_t db_eci;
-        db_eci.x = (state->b_field_eci.x - state->b_field_eci_prev.x) / dt;
-        db_eci.y = (state->b_field_eci.y - state->b_field_eci_prev.y) / dt;
-        db_eci.z = (state->b_field_eci.z - state->b_field_eci_prev.z) / dt;
-
-        /* Guard against zero derivative (first step) */
-        if (vec3d_norm(db_eci) < 1.0e-15) {
-            db_eci = vec3d_make(1.0e-9, 1.0e-9, 1.0e-9);
-        }
-
-        /* Body magnetic field derivative */
-        vec3d_t db_body;
-        db_body.x = (state->mag.field.x - state->mag_field_prev.x) / dt;
-        db_body.y = (state->mag.field.y - state->mag_field_prev.y) / dt;
-        db_body.z = (state->mag.field.z - state->mag_field_prev.z) / dt;
-
-        if (vec3d_norm(db_body) < 1.0e-15) {
-            db_body = vec3d_make(1.0e-9, 1.0e-9, 1.0e-9);
-        }
-
-        /* Corrected body derivative: dB_body/dt + ω × B_body
-         * Ref: Nadir_pointing.m L139 */
-        vec3d_t omega_cross_b = vec3d_cross(state->gyro.angular_vel,
-                                            state->mag.field);
-        vec3d_t body2_corrected = vec3d_add(db_body, omega_cross_b);
-
-        ref_primary  = db_eci;
-        ref_secondary = state->b_field_eci;
-        body_primary = body2_corrected;
-        body_secondary = state->mag.field;
-    }
+    /* Sun-visible TRIAD
+     * Ref: Nadir_pointing.m L112-119
+     *   triad(Sun_ECI, B_ECI, Sun_body, B_body)
+     *
+     * The MATLAB eclipse variant (dB/dt pair, L126-140) is not used: in
+     * eclipse nadir_step() propagates the last TRIAD with the
+     * bias-corrected gyro instead, which needs no dB_ECI/dt history. */
+    vec3d_t ref_primary   = state->sun_eci;
+    vec3d_t ref_secondary = state->b_field_eci;
+    vec3d_t body_primary   = state->sun.sun_body;
+    vec3d_t body_secondary = state->mag.field;
 
     /* Compute rotation matrix via TRIAD */
     mat3d_t rot;

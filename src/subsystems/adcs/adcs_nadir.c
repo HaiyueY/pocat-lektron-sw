@@ -4,7 +4,9 @@
  *
  * Algorithm overview:
  *   1. Estimate q_eci_body: TRIAD + gyro bias estimation when sunlit,
- *      bias-corrected gyro propagation + magnetometer correction in eclipse
+ *      bias-corrected gyro propagation + magnetometer correction in eclipse.
+ *      No actuation until the first sunlit TRIAD (attitude_valid), or on
+ *      a step without valid gyro/magnetometer readings.
  *   2. Compute the yaw-invariant 2-DOF reduced-attitude error:
  *        nadir_body = R(q_est) · n̂_eci
  *        ε = ẑ_body × nadir_body
@@ -48,18 +50,38 @@
 void nadir_init(adcs_state_t *state)
 {
     state->mag_field_prev = vec3d_zero();
-    state->b_field_eci_prev = vec3d_zero();
-    state->omega_filtered = vec3d_zero();
     state->gyro_bias_est = vec3d_zero();
     state->bias_update_count = 0;
     state->q_eci_body = quat_identity();
     state->q_triad_prev = quat_identity();
+    state->attitude_valid = 0;
     state->step_count = 0;
     mtq_reset_accumulator();
 }
 
+/** @brief Command zero dipole for this step. */
+static void nadir_hold(adcs_state_t *state)
+{
+    state->mtq_cmd.dipole = vec3d_zero();
+    state->mtq_cmd.intensity_ma = vec3d_zero();
+    state->step_count++;
+}
+
 void nadir_step(adcs_state_t *state)
 {
+    /* Without a gyro reading the attitude cannot be propagated over this
+     * step, so the estimate is dropped until the next sunlit TRIAD. Without
+     * a field reading there is nothing to steer against. */
+    if (!state->gyro.valid) {
+        state->attitude_valid = 0;
+        nadir_hold(state);
+        return;
+    }
+    if (!state->mag.valid) {
+        nadir_hold(state);
+        return;
+    }
+
     /* Step 1: Attitude determination + gyro bias estimation
      *
      * Sunlit: TRIAD gives full 3-axis attitude.  Estimate gyro bias by
@@ -76,8 +98,9 @@ void nadir_step(adcs_state_t *state)
      * drift perpendicular to B:
      *   δθ_⊥ = (B_pred × B_meas) / |B|²
      *   q = (1, K/2·δθ_⊥) ⊗ q  */
-    if (state->sun.sun_visible) {
+    if (state->sun.valid && state->sun.sun_visible) {
         determination_update(state);
+        state->attitude_valid = 1;
 
         /* Estimate gyro bias from TRIAD vs gyro comparison.
          * ω_triad = 2 * vec(q_current ⊗ conj(q_prev)) / dt
@@ -131,6 +154,12 @@ void nadir_step(adcs_state_t *state)
             }
         }
         state->q_triad_prev = state->q_eci_body;
+    } else if (!state->attitude_valid) {
+        /* Eclipse before the first TRIAD: q_eci_body is still the arbitrary
+         * initial value, and propagating it would only "capture" a wrong
+         * attitude. Wait for the Sun without actuating. */
+        nadir_hold(state);
+        return;
     } else {
         /* Eclipse: propagate with bias-corrected gyro */
         vec3d_t omega_corrected = vec3d_sub(state->gyro.angular_vel,
@@ -207,9 +236,7 @@ void nadir_step(adcs_state_t *state)
     double b_norm = vec3d_norm(b_body);
 
     if (b_norm < 1.0e-12 || state->step_count == 0) {
-        state->mtq_cmd.dipole = vec3d_zero();
-        state->mtq_cmd.intensity_ma = vec3d_zero();
-        state->step_count++;
+        nadir_hold(state);
         return;
     }
 

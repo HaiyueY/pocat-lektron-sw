@@ -54,6 +54,7 @@ void detumble_init(adcs_state_t *state)
     state->mag_field_prev = vec3d_zero();
     state->detumble_stable_count = 0;
     state->step_count = 0;
+    mtq_reset_accumulator();
 }
 
 double detumble_select_dt(const adcs_state_t *state)
@@ -75,6 +76,16 @@ double detumble_select_dt(const adcs_state_t *state)
 
 int detumble_step(adcs_state_t *state)
 {
+    /* No actuation and no progress towards the exit condition on a step
+     * without both readings */
+    if (!state->gyro.valid || !state->mag.valid) {
+        state->mtq_cmd.dipole = vec3d_zero();
+        state->mtq_cmd.intensity_ma = vec3d_zero();
+        state->detumble_stable_count = 0;
+        state->step_count++;
+        return 0;
+    }
+
     vec3d_t omega = state->gyro.angular_vel;
     vec3d_t b_body = state->mag.field;
 

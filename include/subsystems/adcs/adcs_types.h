@@ -104,17 +104,14 @@ typedef struct {
     /* Estimated attitude */
     quat_t  q_eci_body;             /**< Quaternion ECI → Body */
     quat_t  q_triad_prev;           /**< Previous TRIAD estimate (for bias est.) */
-    vec3d_t omega_body;             /**< Angular velocity in body frame [rad/s] */
-    vec3d_t omega_filtered;         /**< Low-pass filtered gyro (for rate damping) */
+    uint8_t attitude_valid;         /**< 1 once a sunlit TRIAD has fixed q_eci_body */
     vec3d_t gyro_bias_est;          /**< Estimated gyro bias [rad/s] */
     uint32_t bias_update_count;     /**< Valid bias-update samples (for 1/N startup) */
 
     /* Reference vectors in ECI frame */
     vec3d_t b_field_eci;            /**< Magnetic field in ECI [T] */
-    vec3d_t b_field_eci_prev;       /**< Previous B-field in ECI [T] */
     vec3d_t sun_eci;                /**< Sun direction in ECI */
     vec3d_t nadir_eci;              /**< Nadir direction in ECI (unit, = -r_hat) */
-    vec3d_t nadir_eci_prev;         /**< Previous nadir ECI (for orbit rate est.) */
     vec3d_t pos_eci;                /**< Satellite position in ECI [m] (for LVLH basis) */
     vec3d_t vel_eci;                /**< Satellite velocity in ECI [m/s] (for LVLH basis) */
 

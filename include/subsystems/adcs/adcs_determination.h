@@ -3,8 +3,7 @@
  * @brief Attitude determination using TRIAD algorithm.
  *
  * Implements the TRIAD algorithm for estimating the satellite rotation
- * matrix from two pairs of reference/body vectors. Supports both
- * sun-visible and eclipse modes as described in the subsystem documentation.
+ * matrix from two pairs of reference/body vectors (Sun and magnetic field).
  *
  * MATLAB reference: ref/H-bridge-simulations/Simulation Nadir Pointing/
  *                   Nadir_pointing.m L109-147
@@ -36,11 +35,11 @@ void triad_compute(vec3d_t ref1, vec3d_t ref2,
                    mat3d_t *rot);
 
 /**
- * @brief Full attitude determination pipeline.
+ * @brief Sun/magnetometer TRIAD attitude fix.
  *
- * Selects vector pairs based on sun visibility:
- *   - Sun visible: uses (B_ECI, Sun_ECI) and (B_body, Sun_body)
- *   - Eclipse: uses (B_ECI, dB_ECI/dt) and (B_body, dB_body/dt + ω×B_body)
+ * Uses (Sun_ECI, B_ECI) and (Sun_body, B_body). Call only while
+ * state->sun.sun_visible is set; in eclipse the caller propagates the
+ * previous estimate with the gyro.
  *
  * Updates state->q_eci_body with the estimated quaternion.
  *
