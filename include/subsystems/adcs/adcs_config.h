@@ -123,10 +123,17 @@ extern "C" {
 #define DETUMBLE_DT_MIN     1.0   /**< Max control freq 1 Hz (at ω ≥ 90°/s) */
 #define DETUMBLE_DT_MAX     2.0   /**< Min control freq 0.5 Hz (at ω ≤ 45°/s) */
 
-/** Dead-time per control cycle [s]: MTQ off + I2C mag/gyro reads + compute.
+/** Dead-time per control cycle [s]: MTQ off + sensor reads + compute.
  *  During this window the magnetorquer is not generating torque.
+ *  Estimate from the S2 drivers (adcs_ctrl_cycle() order):
+ *    MTQ to zero (3 DRV8214 writes)            ≈ 0.5 ms
+ *    IIM-42652 rate + temperature              ≈ 0.5 ms
+ *    CSS, 7 mux channels × 4 ADC samples       ≈ 1 ms
+ *    MMC5983MA SET/RESET pair (2 × 8 ms at BW 100 Hz, 1 ms ticks)
+ *      + temperature                           ≈ 22 ms
+ *  ≈ 24 ms, rounded up. TBC by measurement on target (S4b).
  *  See docs/adcs_detumble_high_rate_analysis.md §7.10.1              */
-#define DETUMBLE_DEAD_TIME_S    0.0035  /**< ~3.5 ms (MTQ settle 20µs + I2C 2.5ms + margin) */
+#define DETUMBLE_DEAD_TIME_S    0.025
 
 /** Nominal geomagnetic field strength at orbital altitude [T] */
 #define DETUMBLE_B0_NOMINAL     3.0e-5
