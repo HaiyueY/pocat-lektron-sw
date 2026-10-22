@@ -26,16 +26,32 @@ static i2c_bus_stats_t stats[I2C_BUS_MAX_DEVICES];
 /** @brief Bus recoveries since boot. */
 static uint32_t recoveries;
 
+/** @brief Transfers abandoned because the mutex was not available in time. */
+static uint32_t lock_timeouts;
+
 static int scheduler_running(void)
 {
     return xTaskGetSchedulerState() == taskSCHEDULER_RUNNING;
 }
 
-static void lock(void)
+/**
+ * @brief Take the bus mutex, waiting at most I2C_BUS_LOCK_TIMEOUT_MS.
+ *
+ * Bounded so that a mutex left held by a deleted task (health-check reset
+ * in the middle of a transfer) turns into failed transfers instead of
+ * blocking every bus user forever.
+ *
+ * @return 0 if the bus may be used, -1 on timeout
+ */
+static int lock(void)
 {
     if (bus_mutex != NULL && scheduler_running()) {
-        xSemaphoreTake(bus_mutex, portMAX_DELAY);
+        if (xSemaphoreTake(bus_mutex, pdMS_TO_TICKS(I2C_BUS_LOCK_TIMEOUT_MS)) != pdTRUE) {
+            lock_timeouts++;
+            return -1;
+        }
     }
+    return 0;
 }
 
 static void unlock(void)
@@ -145,7 +161,9 @@ int i2c_bus_read(uint8_t addr7, uint8_t reg, uint8_t *buf, uint16_t len)
     HAL_StatusTypeDef status;
     int rc;
 
-    lock();
+    if (lock() != 0) {
+        return -1;
+    }
     status = HAL_I2C_Mem_Read(&hi2c3, (uint16_t)(addr7 << 1), reg, I2C_MEMADD_SIZE_8BIT,
                               buf, len, I2C_BUS_TIMEOUT_MS);
     rc = finish(addr7, status);
@@ -158,7 +176,9 @@ int i2c_bus_write(uint8_t addr7, uint8_t reg, const uint8_t *buf, uint16_t len)
     HAL_StatusTypeDef status;
     int rc;
 
-    lock();
+    if (lock() != 0) {
+        return -1;
+    }
     status = HAL_I2C_Mem_Write(&hi2c3, (uint16_t)(addr7 << 1), reg, I2C_MEMADD_SIZE_8BIT,
                                (uint8_t *)buf, len, I2C_BUS_TIMEOUT_MS);
     rc = finish(addr7, status);
@@ -170,7 +190,9 @@ int i2c_bus_recover(void)
 {
     int rc;
 
-    lock();
+    if (lock() != 0) {
+        return -1;
+    }
     rc = recover_locked();
     unlock();
     return rc;
@@ -181,9 +203,16 @@ uint32_t i2c_bus_recovery_count(void)
     return recoveries;
 }
 
+uint32_t i2c_bus_lock_timeout_count(void)
+{
+    return lock_timeouts;
+}
+
 void i2c_bus_get_stats(i2c_bus_stats_t out[I2C_BUS_MAX_DEVICES])
 {
-    lock();
+    if (lock() != 0) {
+        return;
+    }
     memcpy(out, stats, sizeof(stats));
     unlock();
 }

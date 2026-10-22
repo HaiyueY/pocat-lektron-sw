@@ -21,6 +21,10 @@
 /** @brief Timeout of one transfer [ms]. */
 #define I2C_BUS_TIMEOUT_MS      10u
 
+/** @brief Longest wait for the bus mutex [ms]; a holder needs at most one
+ *  transfer timeout plus a recovery. */
+#define I2C_BUS_LOCK_TIMEOUT_MS 100u
+
 /** @brief Number of device addresses tracked by the error counters. */
 #define I2C_BUS_MAX_DEVICES     8u
 
@@ -52,16 +56,21 @@ int i2c_bus_write(uint8_t addr7, uint8_t reg, const uint8_t *buf, uint16_t len);
 
 /**
  * @brief Force a bus recovery (9 SCL clocks + STOP + reinit).
- * @return 0 if SDA is released afterwards, -1 if it is still held low
+ * @return 0 if SDA is released afterwards, -1 if it is still held low or
+ *         the bus mutex timed out
  */
 int i2c_bus_recover(void);
 
 /** @brief Number of recoveries performed since boot. */
 uint32_t i2c_bus_recovery_count(void);
 
+/** @brief Number of transfers refused because the bus mutex timed out. */
+uint32_t i2c_bus_lock_timeout_count(void);
+
 /**
  * @brief Copy the per-address statistics.
- * @param out Array of I2C_BUS_MAX_DEVICES entries.
+ * @param out Array of I2C_BUS_MAX_DEVICES entries; left unchanged if the
+ *            bus mutex timed out.
  */
 void i2c_bus_get_stats(i2c_bus_stats_t out[I2C_BUS_MAX_DEVICES]);
 
