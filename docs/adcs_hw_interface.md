@@ -159,9 +159,9 @@ i2c_bus.c（I2C3：互斥、10 ms 超时、按地址计错、9 时钟恢复）  
 
 | 项 | 阶段 |
 |----|------|
-| ADCS 任务尚未调用 `adcs_hal_*`，驱动和板级 HAL 会被 `--gc-sections` 裁掉。默认构建 FLASH 80 256 B（S3：79 092 B，增加的 +1.2 KB 是 I2C3/ADC2 初始化和 `i2c_bus_init`），RAM 60 568 B（+184 B）；正式入账推迟 | S4a/S4b |
-| 星上还没有由 6 路电压求太阳矢量和可见性的代码（目前只在 `test/sim/sim_photodiode.c` 中） | S4a |
-| `DETUMBLE_DEAD_TIME_S` = 3.5 ms 的假设偏小：一次磁强计读数约 18 ms（另加 SET/RESET） | S4a |
+| ~~ADCS 任务尚未调用 `adcs_hal_*`，驱动和板级 HAL 会被 `--gc-sections` 裁掉~~ **S4 已接入**，入账见 `docs/adcs_resource_budget.md` S4 节 | S4a/S4b |
+| ~~星上还没有由 6 路电压求太阳矢量和可见性的代码~~ **S4 已解决**：`determination_css_sun()` | S4a |
+| ~~`DETUMBLE_DEAD_TIME_S` = 3.5 ms 的假设偏小~~ **S4 已改为 25 ms 估算值**，实测待 S4b | S4a/S4b |
 | `periph_reconfigure_for_freq()` 重新初始化 I2C3/ADC2 时没有取总线锁；换频期间如果正在传输，会出错 | S4b |
 | CRC 的计算与校验 | S5 |
 | 驱动的主机单元测试、`--adcs-hwtest` 上板测试固件、线圈 R ±25% 扫描 | 测试阶段（推迟） |

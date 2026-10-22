@@ -10,7 +10,7 @@
 | S1 | dev `0510f06` | 79 092 B（7.54%） | 60 384 B（61.43%） | 静态估算 ≈ 2.4 KB（≈ 60%） | — （S3/S4 用 DWT 实测） |
 | S2 | | | | | |
 | S3 | dev `a585e78` | 79 092 B（7.54%）不变（未接入，被 gc）；接入后约 +30.7 KB | 60 384 B 不变；模型本身无静态 RAM | 参考矢量更新 1428 B / 载入 TLE 1740 B，都低于 nadir 路径，最坏仍 ≈ 2.4 KB | 估算约 0.2 M 周期/次（±2×）≈ 2.5 / 7.7 / 25 / 100 ms；待 `ADCS_BENCH` 实测 |
-| S4 | | | | 实测水位 | |
+| S4 | dev `88fc8eb`（S4a + S4b 接线） | 130 796 B（12.47%）：+50 540 B，算法、模型和 libm 第一次被链接 | 61 960 B（63.03%）：+1 392 B（静态 `adcs_ctrl_t`） | 静态：载入 TLE 2 084 B，控制周期 2 000 B，≈ 56%；实测水位待硬件 | 待硬件（`adcs_get_task_stats()` + DWT） |
 
 ---
 
@@ -131,6 +131,52 @@ S4 的任务按顺序调用 `adcs_ephem_update()` 和 `adcs_mode_step()`，两�
 | **合计** | | **约 0.2 M（±2×）** |
 
 折合 80 / 26 / 8 / 2 MHz 下约为 2.5 / 7.7 / 25 / 100 ms。在 2 MHz、1 Hz 控制频率下约占 10% CPU；必要时可以降低参考矢量的更新频率（例如 10 s 更新一次并插值）。在 IGRF 递推中改为查表平方根常数之前，n = 13 时还要多约 208 次软 `sqrt`。
+
+---
+
+## S4 任务闭环（2026-10-22）
+
+- 源码：dev `88fc8eb`（`adcs_ctrl` 控制周期 + `adcs.c` 任务外壳 + `i2c_bus` 锁超时），对比基准为 S2a 的 dev `80f1db2`
+- 构建：`./build.sh --clean`（Debug，`-Og -g3`）。warning 9 个，与基准相同，ADCS 与 `i2c_bus` 中 0 个
+
+### 整体占用
+
+| 构建 | FLASH | RAM |
+|------|-------|-----|
+| S2a dev `80f1db2` | 80 256 B（7.65%） | 60 568 B（61.61%） |
+| S4 dev `88fc8eb` | 130 796 B（12.47%） | 61 960 B（63.03%） |
+| 增量 | +50 540 B | +1 392 B |
+
+### FLASH 增量构成（`map_diff.py`）
+
+| 来源 | 字节 | 主要组成 |
+|------|------|---------|
+| ADCS 目标文件 | 34 965 | `adcs_sgp4` 7 628、`adcs_nadir` 5 920、`adcs_determination` 3 204、`adcs_igrf` 4 800、`adcs_ephemeris` 1 806、`adcs_tle` 1 790、`adcs_detumble` 1 226、`adcs_ctrl` 1 166、`adcs_sun` 1 152、`adcs_time` 960、`adcs_calib` 902、`adcs_hal_board` 816、`adcs` 684、驱动 1 388 |
+| libm | 12 504 | 与 S3 估算一致（`pow`、`rem_pio2` 链、`fmod`、`atan`/`atan2`、`sqrt` 等） |
+| libgcc | 460 | |
+| 其他 | 2 610 | HAL I²C 1 782、`i2c_bus` 638 |
+
+S3 预计“接入后约 +30.7 KB”只包括模型；实际增量更大，是因为 S2 的驱动/HAL 和 S1 的算法也是在这一步第一次被任务引用、不再被 gc 掉。
+
+RAM +1 392 B：`adcs.c` 的 bss 1 002 B（`adcs_ctrl_t`，其中 `adcs_sgp4_t` 和 `adcs_tle_t` 占大部分）、`adcs_hal_board.c` 228 B（校准记录）、其余 FreeRTOS/HAL。
+
+### 静态栈（`stack_depth.py`，默认构建的 ELF）
+
+| 入口 | 最坏深度 | 最坏路径 |
+|------|---------|---------|
+| `adcs_task` | 2 084 B | `adcs_task`(8) → `process_adcs`(16) → `load_tle_from_flash`(312) → `adcs_orbit_load_tle`(416) → `adcs_sgp4_init`(520) → `cos` → `__kernel_rem_pio2`(648) → … |
+| `run_cycle` | 2 000 B | `run_cycle`(32) → `adcs_ctrl_cycle`(32) → `adcs_mode_step`(8) → `nadir_step`(896) → `determination_update`(272) → `triad_compute`(400) → … |
+| 间接调用：`read_sensors` → `adcs_hal_read_mag` | 约 560 B | `adcs_hal_read_mag` 480 B |
+| 间接调用：`apply_output` → `mtq_apply_command` | 约 430 B | |
+| `update_references` | 1 444 B | 与 `adcs_mode_step` 顺序调用，不嵌套 |
+
+最坏为 2 084 B，加上任务上下文约 200 B 后约为 2.3 KB / 4 096 B（≈ 56%）。工具不跟踪函数指针，所以 `adcs_io_t` 的调用单独列出；它们都比 nadir 路径浅。`printf` 在 `load_tle_from_flash` 中是在 TLE 载入返回之后才调用的，不与上面的路径嵌套。
+
+### 回归（主机）
+
+- 第 1 个提交（#18/#19/#20 + 有效标志 + 消旋 Σ-Δ 复位）：`nadir`、`detumble` 逐位不变。Monte Carlo 只有末端 |ω| 有微小变化：Σ-Δ 累加器是静态变量，原来会从上一次试验带到下一次，现在每次进入消旋都会复位（30 °/s 平均收敛时间 2884.0 → 2884.1 s，90 °/s 4150.1 → 4148.7 s，均为 50/50）。`nadir_ephem` 在阴影中起步：原来从任意初值出发做陀螺传播，碰巧把误差带到了 15°；现在日出前不施加控制，卫星自由漂移时经过一次 < 20°（“首次捕获”计时从这里开始），日出时漂移到 68°，约 650 s 后重新收敛。APE 99.06% → 96.41%（门限 95%，仍通过），末轨均值 3.28° → 3.19°，峰值 23.7° → 68.5°。峰值来自测试把未受控的偶然穿越算作捕获。
+- 第 3 个提交（死区 3.5 → 25 ms）：30 °/s 平均收敛时间 2884.1 → 2880.0 s，90 °/s 4148.7 → 4213.3 s，均为 50/50；`test_detumble` 从 5668.9 s 变为 5687.9 s。
+- 其余提交（CSS 太阳矢量、`adcs_ctrl`、任务外壳、`i2c_bus`）：所有输出逐位不变。`ctest` 7/7。
 
 ---
 

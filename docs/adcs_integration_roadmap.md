@@ -1,6 +1,6 @@
 # ADCS 集成路线图 — pocat-lektron-sw
 
-> 状态：草案 · 2026-10-21 · S1 已完成（上板一项待硬件）· S3 已完成（DWT 周期实测待硬件）· S2a 已完成（S2b 上板验证待硬件）
+> 状态：草案 · 2026-10-22 · S1 已完成（上板一项待硬件）· S3 已完成（DWT 周期实测待硬件）· S2a 已完成（S2b 上板验证待硬件）· S4a 已完成、S4b 已接线（实测与 PIL 待硬件）
 > 目标：把 `src/subsystems/adcs/` 中已在主机仿真里验证过的 ADCS 算法完整接入 FreeRTOS 飞控软件，并在 FlatSat / 亥姆霍兹线圈上完成验收。
 
 已验证的算法（主机仿真，`test/`）：
@@ -25,7 +25,7 @@
 | # | 发现 | 位置 | 阶段 |
 |---|------|------|------|
 | 1 | ~~`obc.c` 残留冲突标记，来自 2026-06-01 合并 `9385c52`~~ **S1 已解决**：合并上游 `15a4761`，`obc.c` 逐字取上游版本（ADCS 的建/复位/健康登记由 `task_management.c` 负责） | `src/subsystems/obc/obc.c` | S1 |
-| 2 | `adcs.c` 自定义 `bit0=DETUMBLE, bit1=NADIR`，与 `notifications.h` 的 `bit0=IDLE, bit1=DETUMBLING, bit2=NADIR` 冲突（**S1 已改用 `N_ADCS_*`**）；`adcs_task` 只是空壳（S4） | `src/subsystems/adcs/adcs.c:25-26`<br>`include/utils/notifications.h:25-29` | S1 / S4 |
+| 2 | ~~`adcs.c` 自定义 `bit0=DETUMBLE, bit1=NADIR`，与 `notifications.h` 的 `bit0=IDLE, bit1=DETUMBLING, bit2=NADIR` 冲突（**S1 已改用 `N_ADCS_*`**）；`adcs_task` 只是空壳~~ **S4 已解决**：任务运行 `adcs_ctrl_cycle()`，见 `docs/adcs_task_design.md` | `src/subsystems/adcs/adcs.c:25-26`<br>`include/utils/notifications.h:25-29` | S1 / S4 |
 | 3 | ~~开发机上没有 `arm-none-eabi-gcc`~~ **S1 已解决**：Arm GNU Toolchain 14.3.Rel1 装在 `~/opt/`，固件已在本机编译通过；`st-flash` 仍未装（等硬件） | — | S1 |
 | 4 | ~~当前 ADCS 板使用 4×DRV8214，固件与仿真仍按 BD2606MVV 建模~~ **S2 已解决**：实际是 **3 片** DRV8214（每轴一片），每轴两只线圈串联，3.3 V 电压调节开环驱动。线圈 R 和 N·A 由 PCB 走线算出：X/Z 43.3 Ω、Y 34.3 Ω，最大电流 71/90 mA，**最大磁矩约为旧值 150 mA 时的一半**；Y 轴 coil factor 从 0.056 改为 0.080。量化与仿真均已更新 | `docs/adcs_hw_interface.md` §4 | S2 |
 | 5 | ADCS 的 I²C 器件挂在 SDA3/SCL3（PC0/PC1）；CSS = TMUX1108（PC2/PA11/PA12）+ `ADC_PH`（PC5 = ADC12_IN14）。**`PoL_ADCS_POWER_EN`（PA7）只接 DRV8214 的 nSLEEP，传感器常电**。**X 轴 DRV8214 的地址 0x30 与 MMC5983MA 冲突（硬件 bug，需改板）**。没有中断/故障线，全部轮询。详见 ICD §1–§3 | `docs/adcs_hw_interface.md` | S2 / 硬件 |
@@ -35,18 +35,20 @@
 | 9 | RTC 失去备份后复位到 2000-01-01，系统中没有“时间有效”概念。**时间有效性不归 ADCS**（2026-10-14 决定），由 OBC/OBDH 负责；ADCS 直接使用 `time_get_unix()` | `src/utils/periph.c:298-336` | OBC / OBDH |
 | 10 | 代码无 INIT 态；SUNSAFE/SURVIVAL 直接暂停 ADCS（文档要求只采 HK）；频率表（文档 CONTINGENCY = 26 MHz）与任务优先级表也与代码不一致 | `src/subsystems/obc/state_machine.c:54-88` vs 文档 §Satellite Operational Modes | S4 / S5 |
 | 11 | 没有“设置 ADCS 模式”的 TC；`TC_UPLOAD_ADCS_TLE/CAL` 只有注释；Flash 中 TLE 地址重复定义（`TLE_ADDR` vs `TLE_ADDR1/2`）；HT 存储（`ht_handling.c`）与 EPS 电量读取均为空桩 | `src/subsystems/comms/tc_handler.c:71-117`<br>`include/utils/flash.h:57-65, 97-98` | S5 |
-| 12 | 健康检查周期 5 s（`obc.c` 中 `health_config`），暂停 ACK 超时 10 s；`tm_check_pause()` 收到 PAUSE 立即 ACK → ADCS 必须在 ACK 前关闭线圈 | `src/subsystems/obc/task_management.c:134-171` | S4 |
+| 12 | 健康检查周期 5 s（`obc.c` 中 `health_config`），暂停 ACK 超时 10 s；`tm_check_pause()` 收到 PAUSE 立即 ACK → ADCS 必须在 ACK 前关闭线圈。**S4 已处理**：PAUSE 先关线圈再 ACK，setup 第一步关线圈，踢狗 ≤ 1 s 与控制周期无关 | `src/subsystems/obc/task_management.c:134-171` | S4 |
 | 13 | APE 要求 < 20°；当前 48 h 仿真峰值 18.3°，余量薄，且基于旧 MTQ 量化模型。S3 真值环境（500 km SSO、实际 IGRF、运动太阳）下 10 个工况的最差 APE 为 95.2%，偏离均出现在阴影中开始 nadir 之后（见 #20） | `docs/adcs_nadir_yaw_invariance_analysis.md`<br>`docs/adcs_orbit_env_models.md` §5.2 | S2 / S4a / S6 |
 | 14 | 上游 `15a4761` 把 printf 改到 **UART4（PC10/PC11）**；Nucleo 的 ST-LINK 虚拟串口在 USART2，看不到输出 | `src/utils/log.c`、`src/utils/periph.c` | S1（上板） |
 | 15 | `build.sh` 需要环境变量 `POCAT_PSK`（32 位十六进制，生成 `psk.h`）；`make` 失败时 `build.sh` 仍返回 0 | `build.sh` | S1 |
 | 16 | `./build.sh --mock` 编译失败：`radiolib_wrapper_mock.c` 仍用 TT&C v2 已删除的 `RadioEvents_t`（归 COMMS）。无射频的 Nucleo 上板与 PIL 需要它 | `src/utils/RadioLib/radiolib_wrapper_mock.c` | S1（上板）/ S4 PIL |
 | 17 | 状态已改名为 `OBC_STATE_BOOT/NM/CM/SSM/SM/SAFE_HOLD`；`BOOT` 有枚举，但 `tasks_for_state()` 的 default 分支会启动全部任务，没有 INIT 逻辑 → #10 仍成立 | `include/subsystems/obc/state_machine.h` | S4 / S5 |
-| 18 | 飞控端 `adcs_mode_init()` 只初始化 `mode`、计数器和 `dt`，其余字段（陀螺、磁强计、估计量）未定义；主机测试曾因此在 detumble 第 0 步得到 NaN（测试已改为零初始化） | `src/subsystems/adcs/adcs_mode_manager.c:28` | S4a |
-| 19 | `determination_update()` 的阴影分支用 `b_field_eci_prev` 求 dB/dt，但这个字段从未被更新（只在 `nadir_init()` 中清零）。目前 `nadir_step()` 只在有日照时调用该函数，所以这个分支不可达；以后启用前必须先补上更新 | `src/subsystems/adcs/adcs_determination.c:107-141`<br>`src/subsystems/adcs/adcs_nadir.c:51` | S4a |
-| 20 | `nadir_init()` 把姿态估计置为单位四元数；如果在阴影中进入 nadir，第一次日照 TRIAD 之前只有从这个任意初值出发的陀螺传播，此时的“捕获”没有意义。S3 闭环中 10 个工况有 4 个在阴影中开始，捕获后又偏离到 24–69° | `src/subsystems/adcs/adcs_nadir.c:55`<br>`docs/adcs_orbit_env_models.md` §7.1 | S4a |
-| 21 | 星上没有由 6 路 CSS 电压求太阳矢量和 `sun_visible` 的代码：加权法向的估计只在 `test/sim/sim_photodiode.c` 中，HAL 只提供电压 | `src/subsystems/adcs/adcs_hal_board.c` | S4a |
-| 22 | `DETUMBLE_DEAD_TIME_S` = 3.5 ms 偏小：MMC5983MA 一次 SET/RESET 读场约 18 ms（BW = 100 Hz），再加陀螺与 CSS 读数 | `include/subsystems/adcs/adcs_config.h`<br>`docs/adcs_hw_interface.md` §6 | S4a |
+| 18 | ~~飞控端 `adcs_mode_init()` 只初始化 `mode`、计数器和 `dt`，其余字段未定义~~ **S4 已解决**：整个 `adcs_state_t` 先清零 | `src/subsystems/adcs/adcs_mode_manager.c:28` | S4a |
+| 19 | ~~`determination_update()` 的阴影分支用从未更新的 `b_field_eci_prev` 求 dB/dt~~ **S4 已解决**：删除这个不可达的分支和不用的字段，函数只做日照 TRIAD | `src/subsystems/adcs/adcs_determination.c:107-141`<br>`src/subsystems/adcs/adcs_nadir.c:51` | S4a |
+| 20 | ~~`nadir_init()` 把姿态估计置为单位四元数；在阴影中进入 nadir 时，第一次 TRIAD 之前从任意初值做陀螺传播~~ **S4 已解决**：第一次日照 TRIAD（`attitude_valid`）之前不输出。`nadir_ephem` 的 APE 从 99.1% 变为 96.4%（仍 ≥ 95%）：测试把日出前自由漂移的偶然穿越算作捕获，见预算表 S4 节 | `src/subsystems/adcs/adcs_nadir.c:55`<br>`docs/adcs_orbit_env_models.md` §7.1 | S4a |
+| 21 | ~~星上没有由 6 路 CSS 电压求太阳矢量和 `sun_visible` 的代码~~ **S4 已解决**：`determination_css_sun()`（门限 0.1 V TBC S6），并用星历阴影否决可见性 | `src/subsystems/adcs/adcs_hal_board.c` | S4a |
+| 22 | ~~`DETUMBLE_DEAD_TIME_S` = 3.5 ms 偏小~~ **S4 已更新估算**为 25 ms（磁强计 SET/RESET 约 18 ms + 温度 + 陀螺 + CSS + 关线圈）；实测待 S4b | `include/subsystems/adcs/adcs_config.h`<br>`docs/adcs_hw_interface.md` §6 | S4a |
 | 23 | `periph_reconfigure_for_freq()` 重新初始化 I2C3/ADC2 时不取 `i2c_bus` 的锁，换频期间如果 ADCS 正在传输会出错 | `src/utils/periph.c` | S4b（与 OBC 对齐） |
+| 24 | `tm_reset_task()` 可能在 ADCS 持有 I²C3 互斥量时删除任务，互斥量随之永远被占用。S4 把 `i2c_bus` 的等待改为最多 100 ms 后报错（不再永久阻塞），但这个互斥量本身仍然无法释放 | `src/utils/i2c_bus.c`<br>`src/subsystems/obc/task_management.c:103-120` | S4b（与 OBC 对齐） |
+| 25 | `OBDH_Read_Request()` 等待 OBDH 应答没有超时；ADCS 载入 TLE 时如果 OBDH 没有运行，就会一直阻塞，直到被健康检查复位 | `src/utils/flash.c:221-233` | S5（与 OBDH 对齐） |
 
 ---
 
@@ -133,19 +135,21 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 ### S4 ADCS 任务闭环
 
+2026-10-22 完成 S4a，S4b 已接线（任务外壳直接绑定 `adcs_hal_*`，固件能编译）。设计见 `docs/adcs_task_design.md`。按决定：上电默认 IDLE，不改 OBC 文件；暂不新增主机测试（`adcs_ctrl.c` 只加入主机编译）；PIL 与各项实测等硬件。
+
 **S4a — 任务骨架**（可与 S2/S3 并行，使用 stub HAL）
 
-- `adcs_state_t` 静态分配。把“一个控制周期”抽成纯函数 `adcs_cycle(state, hal)`，RTOS 任务只做调度外壳，便于主机测试。
-- **周期调度。** 按绝对截止时间计算 `xTaskNotifyWait` 的超时；`health_kick` 与控制周期解耦（每 ≤ 1 s 一次），以支持消旋 1–2 s 和未来 nadir 10 s 的自适应周期。
-- **周期时序（分时死区）。** MTQ 关 → 等待线圈电流衰减 → 读磁强计（含 SET/RESET）/ 陀螺 / CSS → 更新参考矢量 → `adcs_mode_step()` → 施加 MTQ。实测死区并更新 `DETUMBLE_DEAD_TIME_S`。
-- **暂停/复位协议。** 收到 `N_TASK_PAUSE` 时先关线圈，再交给 `tm_check_pause()` 发 ACK；健康复位后的 setup 也先关线圈；恢复时重置计时与滤波器。
-- **参考矢量。** `adcs_orbit_t` 静态分配；每个周期先调用 `adcs_ephem_update()` 再调用 `adcs_mode_step()`（接口见 `docs/adcs_orbit_env_models.md` §1.1）；收到 `N_ADCS_NEW_TLE` 时调用 `adcs_orbit_load_tle()`。
-- **模式管理。** 区分“期望模式”与“当前模式”，由任务层负责排序（例：期望 NADIR 但 |ω| 过大 → 先 DETUMBLING → IDLE → NADIR）。加入 FDIR 转换：nadir 中 |ω| 超限 → 消旋；星历无效（`ADCS_EPH_INVALID_MASK`）、TLE 过期（`ADCS_EPH_TLE_STALE`）或传感器无效 → IDLE；第一次有效 TRIAD 之前不进入 nadir（发现 #20）。`nadir_step` 检查各传感器的 `valid` 标志；修复或删除 `determination_update()` 的阴影分支（发现 #19）。
+- [x] `adcs_ctrl_t`（含 `adcs_state_t`、`adcs_orbit_t`）静态分配。一个控制周期抽成不依赖 FreeRTOS/HAL 的 `adcs_ctrl_cycle(ctrl, io, unix_s, dt)`，I/O 通过 `adcs_io_t` 注入；RTOS 任务只做调度外壳。
+- [x] **周期调度。** 按绝对截止时间计算等待超时；`health_kick` 与控制周期解耦（每 ≤ 1 s 一次）；周期由模式决定（消旋 1–2 s、nadir 1 s、IDLE 10 s）；`dt` 用实测的 tick 差。
+- [x] **周期时序（分时死区）。** MTQ 置零 → 陀螺 → CSS → 磁强计（最后读，前面的读数时间用作电流衰减）→ 参考矢量 → `adcs_mode_step()` → 施加 MTQ。`DETUMBLE_DEAD_TIME_S` 估算改为 25 ms，**实测待硬件**。
+- [x] **暂停/复位协议。** 收到 `N_TASK_PAUSE` 时先关线圈，再交给 `tm_check_pause()` 发 ACK；setup（上电或健康复位）第一步关线圈；恢复时当前模式回到 IDLE，计时与滤波器重置。
+- [x] **参考矢量。** 每个周期（消旋时除外）先 `adcs_ephem_update()` 再 `adcs_mode_step()`；上电和收到 `N_ADCS_NEW_TLE` 时从 `TLE_ADDR` 载入（暂定 2 × 69 字符，S5 定稿）。
+- [x] **模式管理与 FDIR。** 期望/当前模式分离，经 IDLE 排序；nadir 中 |ω| > 5 °/s 持续 10 个周期 → 消旋；星历无效或 TLE 过期 → IDLE（消旋不受影响）；陀螺/磁强计连续 3 个周期无效 → IDLE；第一次 TRIAD 之前不输出（#20）；`nadir_step`/`detumble_step` 检查 `valid`；删除阴影分支（#19）；CSS 求太阳矢量（#21）。门限均 TBC。
 
 **S4b — 真实 HAL 集成**（需要 S2 + S3）
 
-- 接入真实 HAL。
-- 评估 ADCS 任务优先级（代码中为 2，文档表中为 4），以及 Flash 擦写造成的抖动（用 GPIO / DWT 实测）。
+- [x] 接入真实 HAL（`board_io` 绑定 `adcs_hal_*` 与 `mtq_apply_command`）。`i2c_bus` 等锁改为有限超时（#24）。
+- [ ] 评估 ADCS 任务优先级（代码中为 2，文档表中为 4），以及 Flash 擦写造成的抖动（用 GPIO / DWT / `adcs_get_task_stats()` 实测）—— **待硬件**
 
 **PIL**
 
@@ -221,8 +225,8 @@ S1 ─┬─> S2  驱动（需要硬件）──────┐
 
 | 决策 | 涉及方 | 最晚阶段 |
 |------|--------|---------|
-| 是否在代码中加入 INIT 态，以及 LEOP 自动消旋的触发条件 | OBC | S4a |
-| SUNSAFE/SURVIVAL 下 ADCS：只采 HK 还是暂停 | OBC | S4a |
+| 是否在代码中加入 INIT 态，以及 LEOP 自动消旋的触发条件（ADCS 侧已定：上电默认 IDLE，只服从 `N_ADCS_DESIRED_STATE_*`；目前没有任何地方发送这些通知） | OBC | S4a → S5 |
+| SUNSAFE/SURVIVAL 下 ADCS：只采 HK 还是暂停（两种 ADCS 都已支持：暂停时线圈断电；“只采 HK”= OBC 发送 IDLE 而不暂停） | OBC | S4a → S5 |
 | ADCS 任务优先级与各态主频（CONTINGENCY 26 MHz？） | OBC | S4b |
 | ~~IGRF 阶数~~ **已决：n = 7**（S3 权衡研究，`docs/adcs_orbit_env_models.md` §5） | ADCS | S3 |
 | 新 ADCS TC 的 ID 与 beacon 字段布局 | COMMS + 地面站 | S5 |
