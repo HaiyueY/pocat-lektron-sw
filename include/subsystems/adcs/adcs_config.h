@@ -234,6 +234,31 @@ extern "C" {
 #define ADCS_CONTROL_DT     1.0
 
 /* =========================================================================
+ * Task Supervision / FDIR (adcs_ctrl.c)
+ * ====================================================================== */
+
+/** Control period in IDLE [s]: sensors and references are still sampled
+ *  for housekeeping, the magnetorquers sleep. */
+#define ADCS_IDLE_PERIOD_S          10.0
+
+/** Largest |ω| at which NADIR is entered directly; above it the task
+ *  detumbles first [rad/s]. 2× the detumble exit threshold so a freshly
+ *  detumbled satellite does not bounce back. TBC. */
+#define ADCS_NADIR_ENTRY_OMEGA      (2.0 * DEG_TO_RAD)
+
+/** Gyro |ω| in NADIR that counts towards falling back to
+ *  detumbling [rad/s]. Same rate as the nadir bias-estimator gate:
+ *  nadir pointing never needs more than ≈ 0.06 °/s. TBC. */
+#define ADCS_FDIR_NADIR_OMEGA       (5.0 * DEG_TO_RAD)
+
+/** Consecutive NADIR cycles above ADCS_FDIR_NADIR_OMEGA before leaving */
+#define ADCS_FDIR_OMEGA_COUNT       10
+
+/** Consecutive cycles without valid gyro and magnetometer readings
+ *  before the current mode is forced to IDLE */
+#define ADCS_SENSOR_FAIL_LIMIT      3
+
+/* =========================================================================
  * Orbit / Environment Models
  * ====================================================================== */
 
