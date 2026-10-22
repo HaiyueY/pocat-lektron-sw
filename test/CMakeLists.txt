@@ -28,6 +28,7 @@ set(ADCS_SOURCES
     ${ADCS_SRC_DIR}/adcs_igrf.c
     ${ADCS_SRC_DIR}/adcs_sun.c
     ${ADCS_SRC_DIR}/adcs_ephemeris.c
+    ${ADCS_SRC_DIR}/adcs_ctrl.c
 )
 
 # Simulator sources

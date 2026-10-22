@@ -105,6 +105,8 @@ int main(void)
     state.gyro.angular_vel = vec3d_make(0.001, 0.001, 0.001);
     state.mag.field = vec3d_make(3e-5, 1e-5, 2e-5);
     state.mag_field_prev = vec3d_make(3e-5, 1e-5, 2e-5);
+    state.gyro.valid = 1;
+    state.mag.valid = 1;
     state.dt = ADCS_CONTROL_DT;
     /* Run enough steps to trigger stable count */
     int auto_done = 0;
