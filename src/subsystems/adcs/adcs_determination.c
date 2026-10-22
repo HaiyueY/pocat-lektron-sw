@@ -88,6 +88,43 @@ void triad_compute(vec3d_t ref1, vec3d_t ref2,
     }
 }
 
+/** Body-frame normals of the six CSS faces, in sun_sensor_data_t order */
+static const vec3d_t css_normals[6] = {
+    { 1.0,  0.0,  0.0},
+    {-1.0,  0.0,  0.0},
+    { 0.0,  1.0,  0.0},
+    { 0.0, -1.0,  0.0},
+    { 0.0,  0.0,  1.0},
+    { 0.0,  0.0, -1.0}
+};
+
+void determination_css_sun(sun_sensor_data_t *sun)
+{
+    vec3d_t sum = vec3d_zero();
+    double v_max = 0.0;
+
+    sun->sun_body = vec3d_zero();
+    sun->sun_visible = 0;
+    if (!sun->valid) {
+        return;
+    }
+
+    for (int i = 0; i < 6; i++) {
+        double v = sun->voltage[i];
+        sum = vec3d_add(sum, vec3d_scale(css_normals[i], v));
+        if (v > v_max) {
+            v_max = v;
+        }
+    }
+
+    /* Opposite faces cancel, so a non-zero sum needs at least one lit face */
+    if (v_max < ADCS_CSS_SUN_THRESHOLD_V || vec3d_norm(sum) < 1.0e-6) {
+        return;
+    }
+    sun->sun_body = vec3d_normalize(sum);
+    sun->sun_visible = 1;
+}
+
 void determination_update(adcs_state_t *state)
 {
     /* Sun-visible TRIAD

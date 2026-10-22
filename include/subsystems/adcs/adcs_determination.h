@@ -35,6 +35,18 @@ void triad_compute(vec3d_t ref1, vec3d_t ref2,
                    mat3d_t *rot);
 
 /**
+ * @brief Sun direction and visibility from the six CSS voltages.
+ *
+ * Sun direction = voltage-weighted sum of the face normals (+X, −X, +Y,
+ * −Y, +Z, −Z), normalised. Sets sun_visible only if the reading is valid,
+ * the brightest face exceeds ADCS_CSS_SUN_THRESHOLD_V and the sum is
+ * non-zero; otherwise sun_body is zero.
+ *
+ * @param[in,out] sun  Reads voltage[] and valid, writes sun_body and sun_visible
+ */
+void determination_css_sun(sun_sensor_data_t *sun);
+
+/**
  * @brief Sun/magnetometer TRIAD attitude fix.
  *
  * Uses (Sun_ECI, B_ECI) and (Sun_body, B_body). Call only while

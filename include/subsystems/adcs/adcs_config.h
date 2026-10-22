@@ -208,6 +208,17 @@ extern "C" {
 #define NADIR_BODY_AXIS_Z   1.0
 
 /* =========================================================================
+ * Sun Sensors
+ * ====================================================================== */
+
+/** Sun-visibility threshold on the brightest of the six CSS faces [V].
+ *  The brightest face sees at least cos(54.7°) = 1/√3 of the full-Sun
+ *  output. 0.1 V is 5σ of the 20 mV simulation noise; the full-Sun output
+ *  of the SLCD-61N8 + 2 kΩ TIA stage is not yet measured, so this is
+ *  TBC with the Sun simulator in S6. */
+#define ADCS_CSS_SUN_THRESHOLD_V    0.1
+
+/* =========================================================================
  * Control Loop Timing
  * ====================================================================== */
 
